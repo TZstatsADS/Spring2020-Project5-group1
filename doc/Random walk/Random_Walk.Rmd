@@ -23,14 +23,19 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # P: A vector of the proportion of points in each ring area
 # Time: The number of days (running times)
 # pc: Probability of being infected
+# transform_probability: A data frame contains the probability of symptom changes
+# speed: A vector of movement speed of points with different symptoms
 
 N = 3000
 # R need to be decreasing
 R = c(40,30,20,10)
 # P should be the value corresponding to R
 P = c(1,2,3,4)
-Times = 30
+Times = 60
 pc = 0.2
+transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.3,0.5,0.8))
+rownames(transform_probability) = 3:5
+speed = c(1, 1, 0.9, 0.6, 0.2, 0, 1)
 ```
 
 ```{r}
@@ -162,11 +167,11 @@ plot_points = function(data, condition){
   if(nrow(data) != length(condition %>% unlist))
     stop('Wrong nrow of condition in plot_points!')
   
-  t = tibble(X = data$X, Y = data$Y, condition = as.factor(condition))
+  t = tibble(X = data$X, Y = data$Y, condition = factor(condition, levels = 1:7))
   g = t %>%
     ggplot(aes(x = X, y = Y, color = condition)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
-    scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    scale_color_manual(values = c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure'), name = 'Condition') + 
     coord_fixed() + 
     my_theme
   g
@@ -273,7 +278,7 @@ through_wall = function(last_data, new_data, R, alpha){
 
 ```{r}
 initialize_infector = function(condition, n){
-  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+  # condition: A data frame contains the condition of points, from 1 to 7, and duration.
   # n : Number of infectors in first day
   
   index = sample(1:nrow(condition), n, replace = FALSE)
@@ -298,7 +303,7 @@ pairwise_dist = function(data1, data2){
 infection = function(data, v, condition){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
-  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+  # condition: A data frame contains the condition of points, from 1 to 7, and duration.
 
   incubation_infection = ifelse(condition$duration > 3, 1, 0)
   incubation_index = which(condition$condition == 2)
@@ -320,7 +325,7 @@ infection = function(data, v, condition){
   canbe_infected_index = which(condition$condition == 1)
   canbe_infected_length = length(canbe_infected_index)
   
-  if(length(infection_index) == 0)
+  if(infection_length == 0)
     return(condition)
   
   distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
@@ -344,6 +349,63 @@ infection = function(data, v, condition){
 
 ## Step 6: Condition worsens or eases
 
+```{r}
+symptom_change = function(condition, v, new_condition, new_v, now, ease, worsen, nochange_day = 3){
+  index = which(condition$condition == now & condition$duration > nochange_day)
+  l = length(index)
+  
+  U = runif(l, 0 ,1)
+  ease_index = index[U < transform_probability[as.character(now),1]]
+  worsen_index = index[U > 1-transform_probability[as.character(now),2]]
+    
+  new_condition[ease_index,] = data.frame(condition = ease, duration = 0)
+  new_condition[worsen_index,] = data.frame(condition = worsen, duration = 0)
+  new_v[ease_index] = v[ease_index] * speed[ease]/speed[now]
+  new_v[worsen_index] = v[worsen_index] * speed[worsen]/speed[now]
+    
+  return(list(new_condition, new_v))
+}
+```
+
+```{r}
+condition_change = function(condition, v, transform_probability, speed){
+  # condition: A data frame contains the condition of points, from 1 to 7, and duration.
+  # v: A vector contains the speed of points
+  # transform_probability: A data frame contains the probability of symptom changes
+  # speed: A vector of movement speed of points with different symptoms
+  
+  new_condition = condition
+  new_v = v
+  
+  # End of incubation period, condition 2->3
+  incubation_index = which(condition$condition == 2)
+  incubation_length = length(incubation_index)
+  
+  U = rnorm(incubation_length, 7, 2)
+  symptom_date = ifelse(U < 3 ,3, U)
+  symptom_index = incubation_index[condition$duration[incubation_index] > symptom_date]
+  
+  new_condition[symptom_index,] = data.frame(condition = 3, duration = 0)
+  new_v[symptom_index] = v[symptom_index] * speed[3]/speed[2]
+  
+  # End of a symptom period, condition 3,4,5 -> (7,4) (3,5) (4,6)
+  temp = symptom_change(condition, v, new_condition, new_v, 3, 7, 4)
+  new_condition = temp[[1]]
+  new_v = temp[[2]]
+  
+  temp = symptom_change(condition, v, new_condition, new_v, 4, 3, 5)
+  new_condition = temp[[1]]
+  new_v = temp[[2]]
+  
+  temp = symptom_change(condition, v, new_condition, new_v, 5, 6, 4)
+  new_condition = temp[[1]]
+  new_v = temp[[2]]
+  
+  return(list(new_condition, new_v))
+}
+```
+
+
 ## Step ?: Simulation
 
 ```{r}
@@ -359,7 +421,7 @@ simulation_points = function(N, R, P, Times){
   intialize = intialize_points(N, R, P)
   data = intialize[[1]]
   condition = data.frame(condition = rep(1, N), duration = rep(0, N))
-  condition = initialize_infector(condition, 2)
+  condition = initialize_infector(condition, 5)
   whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
   
   v = rnorm(N, 1, 0.5)
@@ -371,6 +433,9 @@ simulation_points = function(N, R, P, Times){
     new_data = random_walk(data, v)
     new_data = through_wall(data, new_data, R, alpha)
     condition = infection(new_data, v, condition)
+    temp = condition_change(condition, v, transform_probability, speed)
+    condition = temp[[1]]
+    v = temp[[2]]
     whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))
     data = new_data
   }
@@ -401,9 +466,9 @@ generate_gif = function(whole_data){
   # whole_data: A data.frame contains X, Y, Condition and Time
   
   p = whole_data %>% 
-    ggplot(aes(x = X, y = Y, color = as.factor(Condition), group = 1L)) + 
+    ggplot(aes(x = X, y = Y, color = factor(Condition, levels = 1:7), group = 1L)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
-    scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    scale_color_manual(values = c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure'), name = 'Condition') +  
     coord_fixed() + 
     transition_time(Time) + 
     ease_aes('linear') + 
