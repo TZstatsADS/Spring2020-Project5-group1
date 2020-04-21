@@ -17,11 +17,49 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 ```
 
 ```{r}
+# N: Total number of points
+# R: A vector of radius
+# P: A vector of the proportion of points in each ring area
+# Time: The number of days (running times)
+
+
 N = 3000
+# R need to be decreasing
 R = c(40,30,20,10)
+# P should be the value corresponding to R
 P = c(1,2,3,4)
 Times = 30
 ```
+
+```{r}
+calculate_alpha = function(N, R, P, c){
+  # N: Total number of points
+  # R: A vector of radius
+  # P: A vector of the proportion of points in each ring area
+  # c: Correction coefficient
+  
+  L = length(R)
+  population = P/sum(P)*N
+  S = R^2
+  area = S - c(S[2:L],0)
+  density = population/area
+  ratio = density / c(0, density[1:(L-1)])
+  alpha = 1/ratio*c
+  
+  return(alpha)
+}
+```
+
+```{r}
+# alpha: A vector of probability of being able to get out of the wall
+
+# alpha should be the value corresponding to R
+# This 1.25 is calculate by whole_data when only calculate step 1 to 4
+# To let the number of points in each ring after 300 runnings is still the same 
+alpha = calculate_alpha(N, R, P, 1.25)
+```
+
+## Step 1: Intialize points
 
 ```{r}
 random_point_circle = function(R, N, x_center = 0, y_center = 0){
@@ -56,7 +94,6 @@ intialize_points = function(N, R, P){
   if(length(R) == 0)
     stop('Length of R is 0 in intialize_points!')
   
-  R = sort(R, decreasing = TRUE)
   L = length(R)
   S = R^2
   
@@ -109,6 +146,8 @@ check_data %>% filter(Radiu<R[3]) %>% nrow()
 check_data %>% filter(Radiu<R[4]) %>% nrow()
 ```
 
+### Step2: Plot points in ggplot
+
 ```{r}
 plot_points = function(data, condition){
   # data: A Data frame contains X and Y in first 2 column
@@ -146,6 +185,8 @@ test_condition = sample(1:7, N, replace = TRUE)
 plot_points(data, test_condition)
 ```
 
+## Step 3: Random walk for one time
+
 ```{r}
 random_walk = function(data, v){
   # data: A Data frame contains X and Y in first 2 column
@@ -173,12 +214,73 @@ new_data = random_walk(data, v)
 plot_points(new_data, test_condition)
 ```
 
+## Step 4: Build the wall
+
+```{r}
+through_wall = function(last_data, new_data, R, alpha){
+  # last_data: A data frame contains X and Y which is last position
+  # new_data: A data frame contains X and Y which is new position
+  # R: A vector of radius
+  # alpha: A vector of probability of being able to get out of the wall
+  
+  last_R = sqrt(last_data$X^2 + last_data$Y^2)
+  new_R = sqrt(new_data$X^2 + new_data$Y^2)
+  
+  R0 = c(Inf, R, 0)
+  last_R0 = cut(last_R, breaks = R0, labels = (length(R)+1):1) %>% as.numeric()
+  new_R0 = cut(new_R, breaks = R0, labels = (length(R)+1):1) %>% as.numeric()
+  
+  # wall_level: for example, R = c(40,30,20,10)
+  # 1. R<10
+  # 2. 10<R<20
+  # 3. 20<R<30
+  # 4. 30<R<40
+  # 5. R>40
+  
+  index = which(last_R0 < new_R0)
+  wall_level = last_R0[index]
+  
+  # To make sure alpha[1] is the wall_level 1's probability
+  alpha0 = rev(alpha)
+  alpha_all = alpha0[wall_level]
+  
+  U = runif(length(index), 0 ,1)
+  
+  index_run = which(U > alpha_all)
+  wall_level_run = wall_level[index_run]
+  index_run = index[index_run]
+  
+  distance = new_data[index_run,c('X', 'Y')] - last_data[index_run,c('X', 'Y')]
+  distance = sqrt(distance$X^2 + distance$Y^2)
+  
+  R1 = last_R[index_run]
+  R2 = new_R[index_run]
+  rest_distance = distance/(R1+R2)*R2
+  
+  ratio = (1-2*rest_distance/new_R[index_run])
+  ratio = ifelse(ratio < -0.5, -0.5, ratio)
+  
+  new_data[index_run,] = new_data[index_run,] * ratio
+  
+  return(new_data)
+}
+```
+
+
+## Step 5: Infection
+
+
+
+## Step ?: Simulation
+
 ```{r}
 simulation_points = function(N, R, P, Times){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
   # Time: The number of days (running times)
+  
+  Start_time = Sys.time()
   
   whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
   intialize = intialize_points(N, R, P)
@@ -195,9 +297,23 @@ simulation_points = function(N, R, P, Times){
       condition = rep(2, N)
     if(t == round(Times/3*2))
       condition = rep(3, N)
-    data = random_walk(data, v)
-    whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(t, nrow(data))))
+    new_data = random_walk(data, v)
+    new_data = through_wall(data, new_data, R, alpha)
+    whole_data = rbind(whole_data, cbind(new_data, Condition = condition, Time = rep(t, nrow(data))))
+    data = new_data
+    
   }
+  
+  End_time = Sys.time()
+  
+  check_data = data %>% mutate(Radiu = sqrt(X^2+Y^2))
+  c1 = check_data %>% filter(Radiu<R[1]) %>% nrow()
+  c2 = check_data %>% filter(Radiu<R[2]) %>% nrow()
+  c3 = check_data %>% filter(Radiu<R[3]) %>% nrow()
+  c4 = check_data %>% filter(Radiu<R[4]) %>% nrow()
+  cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\nUsed time:')
+  print(End_time-Start_time)
+  cat('\n')
   
   return(whole_data)
 }
@@ -206,6 +322,8 @@ simulation_points = function(N, R, P, Times){
 ```{r}
 whole_data = simulation_points(N, R, P, Times)
 ```
+
+## Step ?: Generate gganimate gif
 
 ```{r}
 generate_gif = function(whole_data){
