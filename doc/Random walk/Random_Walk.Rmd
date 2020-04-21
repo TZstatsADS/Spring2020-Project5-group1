@@ -24,7 +24,7 @@ Times = 30
 ```
 
 ```{r}
-random_point_circle = function(R, N){
+random_point_circle = function(R, N, x_center = 0, y_center = 0){
   # R: Radiu
   # N: Number of points
   
@@ -32,14 +32,13 @@ random_point_circle = function(R, N){
     stop('Length of R is not 1 in random_point_circle!')
   if(length(N) != 1)
     stop('Length of N is not 1 in random_point_circle!')
-  if(N == 0){
+  if(N == 0)
     return(data.frame(X = NULL, Y = NULL))
-  }
   
   U = runif(N, 0, R^2)
   A = runif(N, 0 ,2*pi)
-  X = sqrt(U)*cos(A)
-  Y = sqrt(U)*sin(A)
+  X = sqrt(U)*cos(A) + x_center
+  Y = sqrt(U)*sin(A) + y_center
   return(data.frame(X = X, Y = Y))
 }
 ```
@@ -83,7 +82,7 @@ intialize_points = function(N, R, P){
     if(i == L){
       number_of_points[L] = number_of_points[L] + generate_points 
     } else{
-      number_of_points[i:L] = number_of_points[i:L] + (S[i:L] - c(S[(i+1):L],0)) / total_area * generate_points
+      number_of_points[i:L] = number_of_points[i:L] + round((S[i:L] - c(S[(i+1):L],0)) / total_area * generate_points)
     }
 
   }
@@ -127,6 +126,7 @@ plot_points = function(data, condition){
     ggplot(aes(x = X, y = Y, color = condition)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
     scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    coord_fixed() + 
     my_theme
   g
 }
@@ -134,13 +134,13 @@ plot_points = function(data, condition){
 
 ```{r}
 # Condition meaning and color
-# 1: Healthy, '#00CC00'
-# 2: Incubation period, '#FFCC00'
-# 3: Moderate, '#FF69B4'
-# 4: Severe, '#DC143C'
-# 5: Cirtical, '#8B0000'
-# 6: Death, '#000000'
-# 7: Cure, '#00CCFF'
+# 1: Healthy, '#00CC00', Electric Green
+# 2: Incubation period, '#FFCC00', Tangerine Yellow
+# 3: Moderate, '#FF69B4', Hot Pink
+# 4: Severe, '#DC143C', Crimson
+# 5: Cirtical, '#8B0000', Dark Red
+# 6: Death, '#000000', Black
+# 7: Cure, '#00CCFF', Deep Sky Blue
 
 test_condition = sample(1:7, N, replace = TRUE) 
 plot_points(data, test_condition)
@@ -213,10 +213,12 @@ generate_gif = function(whole_data){
   
   p = whole_data %>% 
     ggplot(aes(x = X, y = Y, color = as.factor(Condition), group = 1L)) + 
-    geom_point(alpha = 0.6) + 
+    geom_point(size = 0.1, alpha = 0.6) + 
     scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    coord_fixed() + 
     transition_time(Time) + 
-    ease_aes('linear')
+    ease_aes('linear') + 
+    my_theme
   
   image <- animate(p)
   image_write(image, "output.gif")
