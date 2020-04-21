@@ -12,19 +12,59 @@ library(tidyverse)
 library(ggplot2)
 library(gganimate)
 library(magick)
+library(proxy)
 
 my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
 ```
 
 ```{r}
+# N: Total number of points
+# R: A vector of radius
+# P: A vector of the proportion of points in each ring area
+# Time: The number of days (running times)
+# pc: Probability of being infected
+
 N = 3000
+# R need to be decreasing
 R = c(40,30,20,10)
+# P should be the value corresponding to R
 P = c(1,2,3,4)
 Times = 30
+pc = 0.2
 ```
 
 ```{r}
-random_point_circle = function(R, N){
+calculate_alpha = function(N, R, P, c){
+  # N: Total number of points
+  # R: A vector of radius
+  # P: A vector of the proportion of points in each ring area
+  # c: Correction coefficient
+  
+  L = length(R)
+  population = P/sum(P)*N
+  S = R^2
+  area = S - c(S[2:L],0)
+  density = population/area
+  ratio = density / c(0, density[1:(L-1)])
+  alpha = 1/ratio*c
+  
+  return(alpha)
+}
+```
+
+```{r}
+# alpha: A vector of probability of being able to get out of the wall
+
+# alpha should be the value corresponding to R
+# This 1.25 is calculate by whole_data when only calculate step 1 to 4
+# To let the number of points in each ring after 300 runnings is still the same 
+alpha = calculate_alpha(N, R, P, 1.25)
+```
+
+## Step 1: Intialize points
+
+```{r}
+random_point_circle = function(R, N, x_center = 0, y_center = 0){
   # R: Radiu
   # N: Number of points
   
@@ -32,14 +72,13 @@ random_point_circle = function(R, N){
     stop('Length of R is not 1 in random_point_circle!')
   if(length(N) != 1)
     stop('Length of N is not 1 in random_point_circle!')
-  if(N == 0){
+  if(N == 0)
     return(data.frame(X = NULL, Y = NULL))
-  }
   
   U = runif(N, 0, R^2)
   A = runif(N, 0 ,2*pi)
-  X = sqrt(U)*cos(A)
-  Y = sqrt(U)*sin(A)
+  X = sqrt(U)*cos(A) + x_center
+  Y = sqrt(U)*sin(A) + y_center
   return(data.frame(X = X, Y = Y))
 }
 ```
@@ -57,7 +96,6 @@ intialize_points = function(N, R, P){
   if(length(R) == 0)
     stop('Length of R is 0 in intialize_points!')
   
-  R = sort(R, decreasing = TRUE)
   L = length(R)
   S = R^2
   
@@ -83,7 +121,7 @@ intialize_points = function(N, R, P){
     if(i == L){
       number_of_points[L] = number_of_points[L] + generate_points 
     } else{
-      number_of_points[i:L] = number_of_points[i:L] + (S[i:L] - c(S[(i+1):L],0)) / total_area * generate_points
+      number_of_points[i:L] = number_of_points[i:L] + round((S[i:L] - c(S[(i+1):L],0)) / total_area * generate_points)
     }
 
   }
@@ -110,6 +148,8 @@ check_data %>% filter(Radiu<R[3]) %>% nrow()
 check_data %>% filter(Radiu<R[4]) %>% nrow()
 ```
 
+### Step2: Plot points in ggplot
+
 ```{r}
 plot_points = function(data, condition){
   # data: A Data frame contains X and Y in first 2 column
@@ -127,6 +167,7 @@ plot_points = function(data, condition){
     ggplot(aes(x = X, y = Y, color = condition)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
     scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    coord_fixed() + 
     my_theme
   g
 }
@@ -134,17 +175,19 @@ plot_points = function(data, condition){
 
 ```{r}
 # Condition meaning and color
-# 1: Healthy, '#00CC00'
-# 2: Incubation period, '#FFCC00'
-# 3: Moderate, '#FF69B4'
-# 4: Severe, '#DC143C'
-# 5: Cirtical, '#8B0000'
-# 6: Death, '#000000'
-# 7: Cure, '#00CCFF'
+# 1: Healthy, '#00CC00', Electric Green
+# 2: Incubation period, '#FFCC00', Tangerine Yellow
+# 3: Moderate, '#FF69B4', Hot Pink
+# 4: Severe, '#DC143C', Crimson
+# 5: Cirtical, '#8B0000', Dark Red
+# 6: Death, '#000000', Black
+# 7: Cure, '#00CCFF', Deep Sky Blue
 
 test_condition = sample(1:7, N, replace = TRUE) 
 plot_points(data, test_condition)
 ```
+
+## Step 3: Random walk for one time
 
 ```{r}
 random_walk = function(data, v){
@@ -173,6 +216,136 @@ new_data = random_walk(data, v)
 plot_points(new_data, test_condition)
 ```
 
+## Step 4: Build the wall
+
+```{r}
+through_wall = function(last_data, new_data, R, alpha){
+  # last_data: A data frame contains X and Y which is last position
+  # new_data: A data frame contains X and Y which is new position
+  # R: A vector of radius
+  # alpha: A vector of probability of being able to get out of the wall
+  
+  last_R = sqrt(last_data$X^2 + last_data$Y^2)
+  new_R = sqrt(new_data$X^2 + new_data$Y^2)
+  
+  R0 = c(Inf, R, 0)
+  last_R0 = cut(last_R, breaks = R0, labels = (length(R)+1):1) %>% as.numeric()
+  new_R0 = cut(new_R, breaks = R0, labels = (length(R)+1):1) %>% as.numeric()
+  
+  # wall_level: for example, R = c(40,30,20,10)
+  # 1. R<10
+  # 2. 10<R<20
+  # 3. 20<R<30
+  # 4. 30<R<40
+  # 5. R>40
+  
+  index = which(last_R0 < new_R0)
+  wall_level = last_R0[index]
+  
+  # To make sure alpha[1] is the wall_level 1's probability
+  alpha0 = rev(alpha)
+  alpha_all = alpha0[wall_level]
+  
+  U = runif(length(index), 0 ,1)
+  
+  index_run = which(U > alpha_all)
+  wall_level_run = wall_level[index_run]
+  index_run = index[index_run]
+  
+  distance = new_data[index_run,c('X', 'Y')] - last_data[index_run,c('X', 'Y')]
+  distance = sqrt(distance$X^2 + distance$Y^2)
+  
+  R1 = last_R[index_run]
+  R2 = new_R[index_run]
+  rest_distance = distance/(R1+R2)*R2
+  
+  ratio = (1-2*rest_distance/new_R[index_run])
+  ratio = ifelse(ratio < -0.5, -0.5, ratio)
+  
+  new_data[index_run,] = new_data[index_run,] * ratio
+  
+  return(new_data)
+}
+```
+
+
+## Step 5: Infection
+
+```{r}
+initialize_infector = function(condition, n){
+  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+  # n : Number of infectors in first day
+  
+  index = sample(1:nrow(condition), n, replace = FALSE)
+  condition[index, 1] = 2
+  
+  return(condition)
+}
+```
+
+```{r}
+pairwise_dist = function(data1, data2){
+  # data1: A data frame contains X and Y which is the position
+  # data2: A data frame contains X and Y which is the position
+  
+  Dist_matrix = as.matrix(proxy::dist(data1, data2))
+  
+  return(Dist_matrix)
+}
+```
+
+```{r}
+infection = function(data, v, condition){
+  # data: A data frame contains X and Y which is the position
+  # v: A vector contains the speed of points
+  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+
+  incubation_infection = ifelse(condition$duration > 3, 1, 0)
+  incubation_index = which(condition$condition == 2)
+  
+  # Condition infection speed
+  # 1: Healthy, 0
+  # 2: Incubation period, 1 if duration > 3, 0 else
+  # 3: Moderate, 1
+  # 4: Severe, 1.5
+  # 5: Cirtical, 2
+  # 6: Death, 0
+  # 7: Cure, 0
+  
+  infection_speed = sapply(condition$condition, function(x) switch(x, '1' = 0,'2' = 1, '3' = 1, '4' = 1.5, '5' = 2, '6' = 0, '7' =  0))
+  infection_speed[incubation_index] = infection_speed[incubation_index] * incubation_infection[incubation_index]
+  
+  infection_index = which(infection_speed > 0)
+  infection_length = length(infection_index)
+  canbe_infected_index = which(condition$condition == 1)
+  canbe_infected_length = length(canbe_infected_index)
+  
+  if(length(infection_index) == 0)
+    return(condition)
+  
+  distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
+  
+  infection_radius = v[infection_index] * infection_speed[infection_index]
+  infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
+  
+  possible_infection = which(distance<infection_radius, arr.ind = TRUE, useNames = TRUE)
+  possible_infection = possible_infection[,2] %>% unique()
+  
+  U = runif(length(possible_infection), 0, 1)
+  
+  confirmed_infection = possible_infection[U<pc]
+  confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
+  
+  condition[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+  
+  return(condition)
+}
+```
+
+## Step 6: Condition worsens or eases
+
+## Step ?: Simulation
+
 ```{r}
 simulation_points = function(N, R, P, Times){
   # N: Total number of points
@@ -180,24 +353,38 @@ simulation_points = function(N, R, P, Times){
   # P: A vector of the proportion of points in each ring area
   # Time: The number of days (running times)
   
+  Start_time = Sys.time()
+  
   whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
   intialize = intialize_points(N, R, P)
   data = intialize[[1]]
-  condition = rep(1, N)
-  whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(0, N)))
+  condition = data.frame(condition = rep(1, N), duration = rep(0, N))
+  condition = initialize_infector(condition, 2)
+  whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
   
   v = rnorm(N, 1, 0.5)
   v[v < 0] = 0
   
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
-    if(t == round(Times/3))
-      condition = rep(2, N)
-    if(t == round(Times/3*2))
-      condition = rep(3, N)
-    data = random_walk(data, v)
-    whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(t, nrow(data))))
+    condition$duration = condition$duration + 1
+    new_data = random_walk(data, v)
+    new_data = through_wall(data, new_data, R, alpha)
+    condition = infection(new_data, v, condition)
+    whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))
+    data = new_data
   }
+  
+  End_time = Sys.time()
+  
+  check_data = data %>% mutate(Radiu = sqrt(X^2+Y^2))
+  c1 = check_data %>% filter(Radiu<R[1]) %>% nrow()
+  c2 = check_data %>% filter(Radiu<R[2]) %>% nrow()
+  c3 = check_data %>% filter(Radiu<R[3]) %>% nrow()
+  c4 = check_data %>% filter(Radiu<R[4]) %>% nrow()
+  cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\nUsed time: ')
+  print(End_time-Start_time)
+  cat('\n')
   
   return(whole_data)
 }
@@ -207,16 +394,20 @@ simulation_points = function(N, R, P, Times){
 whole_data = simulation_points(N, R, P, Times)
 ```
 
+## Step ?: Generate gganimate gif
+
 ```{r}
 generate_gif = function(whole_data){
   # whole_data: A data.frame contains X, Y, Condition and Time
   
   p = whole_data %>% 
     ggplot(aes(x = X, y = Y, color = as.factor(Condition), group = 1L)) + 
-    geom_point(alpha = 0.6) + 
+    geom_point(size = 0.1, alpha = 0.6) + 
     scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    coord_fixed() + 
     transition_time(Time) + 
-    ease_aes('linear')
+    ease_aes('linear') + 
+    my_theme
   
   image <- animate(p)
   image_write(image, "output.gif")
