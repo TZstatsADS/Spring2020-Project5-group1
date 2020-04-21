@@ -12,6 +12,7 @@ library(tidyverse)
 library(ggplot2)
 library(gganimate)
 library(magick)
+library(proxy)
 
 my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
 ```
@@ -21,7 +22,7 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # R: A vector of radius
 # P: A vector of the proportion of points in each ring area
 # Time: The number of days (running times)
-
+# pc: Probability of being infected
 
 N = 3000
 # R need to be decreasing
@@ -29,6 +30,7 @@ R = c(40,30,20,10)
 # P should be the value corresponding to R
 P = c(1,2,3,4)
 Times = 30
+pc = 0.2
 ```
 
 ```{r}
@@ -269,7 +271,78 @@ through_wall = function(last_data, new_data, R, alpha){
 
 ## Step 5: Infection
 
+```{r}
+initialize_infector = function(condition, n){
+  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+  # n : Number of infectors in first day
+  
+  index = sample(1:nrow(condition), n, replace = FALSE)
+  condition[index, 1] = 2
+  
+  return(condition)
+}
+```
 
+```{r}
+pairwise_dist = function(data1, data2){
+  # data1: A data frame contains X and Y which is the position
+  # data2: A data frame contains X and Y which is the position
+  
+  Dist_matrix = as.matrix(proxy::dist(data1, data2))
+  
+  return(Dist_matrix)
+}
+```
+
+```{r}
+infection = function(data, v, condition){
+  # data: A data frame contains X and Y which is the position
+  # v: A vector contains the speed of points
+  # condition: A data frame contains the condtion of points, from 1 to 7, and duration.
+
+  incubation_infection = ifelse(condition$duration > 3, 1, 0)
+  incubation_index = which(condition$condition == 2)
+  
+  # Condition infection speed
+  # 1: Healthy, 0
+  # 2: Incubation period, 1 if duration > 3, 0 else
+  # 3: Moderate, 1
+  # 4: Severe, 1.5
+  # 5: Cirtical, 2
+  # 6: Death, 0
+  # 7: Cure, 0
+  
+  infection_speed = sapply(condition$condition, function(x) switch(x, '1' = 0,'2' = 1, '3' = 1, '4' = 1.5, '5' = 2, '6' = 0, '7' =  0))
+  infection_speed[incubation_index] = infection_speed[incubation_index] * incubation_infection[incubation_index]
+  
+  infection_index = which(infection_speed > 0)
+  infection_length = length(infection_index)
+  canbe_infected_index = which(condition$condition == 1)
+  canbe_infected_length = length(canbe_infected_index)
+  
+  if(length(infection_index) == 0)
+    return(condition)
+  
+  distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
+  
+  infection_radius = v[infection_index] * infection_speed[infection_index]
+  infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
+  
+  possible_infection = which(distance<infection_radius, arr.ind = TRUE, useNames = TRUE)
+  possible_infection = possible_infection[,2] %>% unique()
+  
+  U = runif(length(possible_infection), 0, 1)
+  
+  confirmed_infection = possible_infection[U<pc]
+  confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
+  
+  condition[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+  
+  return(condition)
+}
+```
+
+## Step 6: Condition worsens or eases
 
 ## Step ?: Simulation
 
@@ -285,23 +358,21 @@ simulation_points = function(N, R, P, Times){
   whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
   intialize = intialize_points(N, R, P)
   data = intialize[[1]]
-  condition = rep(1, N)
-  whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(0, N)))
+  condition = data.frame(condition = rep(1, N), duration = rep(0, N))
+  condition = initialize_infector(condition, 2)
+  whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
   
   v = rnorm(N, 1, 0.5)
   v[v < 0] = 0
   
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
-    if(t == round(Times/3))
-      condition = rep(2, N)
-    if(t == round(Times/3*2))
-      condition = rep(3, N)
+    condition$duration = condition$duration + 1
     new_data = random_walk(data, v)
     new_data = through_wall(data, new_data, R, alpha)
-    whole_data = rbind(whole_data, cbind(new_data, Condition = condition, Time = rep(t, nrow(data))))
+    condition = infection(new_data, v, condition)
+    whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))
     data = new_data
-    
   }
   
   End_time = Sys.time()
