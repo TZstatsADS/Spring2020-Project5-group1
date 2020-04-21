@@ -311,7 +311,7 @@ simulation_points = function(N, R, P, Times){
   c2 = check_data %>% filter(Radiu<R[2]) %>% nrow()
   c3 = check_data %>% filter(Radiu<R[3]) %>% nrow()
   c4 = check_data %>% filter(Radiu<R[4]) %>% nrow()
-  cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\nUsed time:')
+  cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\nUsed time: ')
   print(End_time-Start_time)
   cat('\n')
   
