@@ -1,0 +1,234 @@
+---
+title: "Random walk"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(gganimate)
+library(magick)
+
+my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r}
+N = 3000
+R = c(40,30,20,10)
+P = c(1,2,3,4)
+Times = 30
+```
+
+```{r}
+random_point_circle = function(R, N){
+  # R: Radiu
+  # N: Number of points
+  
+  if(length(R) != 1)
+    stop('Length of R is not 1 in random_point_circle!')
+  if(length(N) != 1)
+    stop('Length of N is not 1 in random_point_circle!')
+  if(N == 0){
+    return(data.frame(X = NULL, Y = NULL))
+  }
+  
+  U = runif(N, 0, R^2)
+  A = runif(N, 0 ,2*pi)
+  X = sqrt(U)*cos(A)
+  Y = sqrt(U)*sin(A)
+  return(data.frame(X = X, Y = Y))
+}
+```
+
+```{r}
+intialize_points = function(N, R, P){
+  # N: Total number of points
+  # R: A vector of radius
+  # P: A vector of the proportion of points in each ring area
+  
+  if(length(N) != 1)
+    stop('Length of N is not 1 in intialize_points!')
+  if(length(R) != length(P))
+    stop('R and P have different length in intialize_points!')
+  if(length(R) == 0)
+    stop('Length of R is 0 in intialize_points!')
+  
+  R = sort(R, decreasing = TRUE)
+  L = length(R)
+  S = R^2
+  
+  S = S/sum(S)
+  P = P/sum(P)
+  
+  if(mean(P/S == sort(P/S)) != 1)
+    stop('The proportion of area is not increasing in intialize_points!')
+  
+  data = data.frame(X = NULL, Y = NULL)
+  
+  number_of_points = rep(0, L)
+  for(i in 1:L){
+    total_area = S[i]
+    if(i == L){
+      current_area = S[i]
+    } else{
+      current_area = S[i]-S[i+1]
+    }
+    need_points = P[i]*N - number_of_points[i]
+    generate_points = round(need_points / current_area * total_area)
+    data = rbind(data, random_point_circle(R[i],  generate_points))
+    if(i == L){
+      number_of_points[L] = number_of_points[L] + generate_points 
+    } else{
+      number_of_points[i:L] = number_of_points[i:L] + (S[i:L] - c(S[(i+1):L],0)) / total_area * generate_points
+    }
+
+  }
+  
+  return(list(data, number_of_points))
+}
+```
+
+```{r}
+intialize = intialize_points(N, R, P)
+data = intialize[[1]]
+# To check if the number of data is right
+number_of_points = intialize[[2]]
+number_of_points
+P/sum(P)*N
+```
+
+```{r}
+# To check the number of data in each ring
+check_data = data %>% mutate(Radiu = sqrt(X^2+Y^2))
+check_data %>% filter(Radiu<R[1]) %>% nrow()
+check_data %>% filter(Radiu<R[2]) %>% nrow()
+check_data %>% filter(Radiu<R[3]) %>% nrow()
+check_data %>% filter(Radiu<R[4]) %>% nrow()
+```
+
+```{r}
+plot_points = function(data, condition){
+  # data: A Data frame contains X and Y in first 2 column
+  # condition: A vector contains 7 factors of illness
+  
+  c = colnames(data)
+  if(c[1] != 'X' | c[2] != 'Y')
+    stop('Wrong name in data in plot_points!')
+  
+  if(nrow(data) != length(condition %>% unlist))
+    stop('Wrong nrow of condition in plot_points!')
+  
+  t = tibble(X = data$X, Y = data$Y, condition = as.factor(condition))
+  g = t %>%
+    ggplot(aes(x = X, y = Y, color = condition)) + 
+    geom_point(size = 0.1, alpha = 0.6) + 
+    scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    my_theme
+  g
+}
+```
+
+```{r}
+# Condition meaning and color
+# 1: Healthy, '#00CC00'
+# 2: Incubation period, '#FFCC00'
+# 3: Moderate, '#FF69B4'
+# 4: Severe, '#DC143C'
+# 5: Cirtical, '#8B0000'
+# 6: Death, '#000000'
+# 7: Cure, '#00CCFF'
+
+test_condition = sample(1:7, N, replace = TRUE) 
+plot_points(data, test_condition)
+```
+
+```{r}
+random_walk = function(data, v){
+  # data: A Data frame contains X and Y in first 2 column
+  # v: A vector contains the speed of points
+  
+  N = nrow(data)
+  if(N != length(v %>% unlist))
+    stop('Wrong nrow of v in Random_Walk!')
+  
+  distance = rnorm(N, v, sd = v/1.5)
+  distance[distance < 0] = 0
+  
+  A = runif(N, 0 ,2*pi)
+  data$X = data$X + distance * cos(A)
+  data$Y = data$Y + distance * sin(A)
+  
+  return(data)
+}
+```
+
+```{r}
+v = rnorm(N, 1, 0.5)
+v[v < 0] = 0
+new_data = random_walk(data, v)
+plot_points(new_data, test_condition)
+```
+
+```{r}
+simulation_points = function(N, R, P, Times){
+  # N: Total number of points
+  # R: A vector of radius
+  # P: A vector of the proportion of points in each ring area
+  # Time: The number of days (running times)
+  
+  whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
+  intialize = intialize_points(N, R, P)
+  data = intialize[[1]]
+  condition = rep(1, N)
+  whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(0, N)))
+  
+  v = rnorm(N, 1, 0.5)
+  v[v < 0] = 0
+  
+  # If change nrow of data, need to change nrow of condition
+  for(t in 1:Times){
+    if(t == round(Times/3))
+      condition = rep(2, N)
+    if(t == round(Times/3*2))
+      condition = rep(3, N)
+    data = random_walk(data, v)
+    whole_data = rbind(whole_data, cbind(data, Condition = condition, Time = rep(t, nrow(data))))
+  }
+  
+  return(whole_data)
+}
+```
+
+```{r}
+whole_data = simulation_points(N, R, P, Times)
+```
+
+```{r}
+generate_gif = function(whole_data){
+  # whole_data: A data.frame contains X, Y, Condition and Time
+  
+  p = whole_data %>% 
+    ggplot(aes(x = X, y = Y, color = as.factor(Condition), group = 1L)) + 
+    geom_point(alpha = 0.6) + 
+    scale_color_manual(values=c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF')) + 
+    transition_time(Time) + 
+    ease_aes('linear')
+  
+  image <- animate(p)
+  image_write(image, "output.gif")
+}
+
+```
+
+```{r}
+generate_gif(whole_data)
+```
+
+
+
+
+
