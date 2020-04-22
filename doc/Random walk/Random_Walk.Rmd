@@ -312,7 +312,7 @@ pairwise_dist = function(data1, data2){
 ```
 
 ```{r}
-infection = function(data, v, condition, infectious_ability){
+infection = function(data, v, condition, infectious_ability, protection_ability){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
   # condition: A vector contains 7 factors of illness and its duration
@@ -342,9 +342,9 @@ infection = function(data, v, condition, infectious_ability){
   
   distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
   
-  infection_change = function(condition2,infectious_ability2, pc){
+  infection_change = function(condition2,infectious_ability2, protection_ability2, pc, infection_radius){
     
-    infection_radius = v[infection_index] * infection_speed[infection_index] * infectious_ability2[infection_index] + min_infection_range
+    infection_radius = v[infection_index] * infection_speed[infection_index] * infectious_ability2[infection_index] * protection_ability2[infection_index] * infection_radius + min_infection_range
     infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
     
     possible_infection = which(distance<infection_radius, arr.ind = TRUE)
@@ -352,7 +352,8 @@ infection = function(data, v, condition, infectious_ability){
   
     U = runif(length(possible_infection), 0, 1)
   
-    confirmed_infection = possible_infection[U < pc]
+    protect_value = protection_ability2[colnames(distance)[possible_infection] %>% as.numeric()]
+    confirmed_infection = possible_infection[U < pc * protect_value]
     confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
     
     condition2[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
@@ -360,8 +361,8 @@ infection = function(data, v, condition, infectious_ability){
     return(condition2)
   }
   
-  condition = infection_change(condition, infectious_ability, pc)
-  condition = infection_change(condition, infectious_ability*2, pc/4)
+  condition = infection_change(condition, infectious_ability, protection_ability, pc, 1)
+  condition = infection_change(condition, infectious_ability, protection_ability, pc/4, 2)
   
   return(condition)
 }
@@ -667,7 +668,7 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 
 ## Step 10: Hospital is working!
 
-## Step 11: We have doctor
+## Step 11: We have doctors
 
 ## Step 12: Train station bring virus
 
@@ -676,6 +677,8 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 ## Step 14: Policy Implementation
 
 ## Step 15: Track and quarantine close contacts
+
+
 
 
 
@@ -704,6 +707,9 @@ simulation_points = function(N, R, P, Times){
   v[v < 0] = 0
   # Step 5
   infectious_ability = rep(1, N)
+  protection_ability = rnorm(N, 1, 0.3)
+  protection_ability[protection_ability < 0.05] = 0.05
+  protection_ability[protection_ability > 1] = 1
   # Step 7
   data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
   # Step 8
@@ -719,7 +725,7 @@ simulation_points = function(N, R, P, Times){
     # Step 4
     new_data = through_wall(data, new_data, R, alpha)
     # Step 5
-    condition = infection(new_data, v, condition, infectious_ability)
+    condition = infection(new_data, v, condition, infectious_ability, protection_ability)
     # Step 6
     temp = condition_change(condition, v, transform_probability, speed)
     condition = temp[[1]]
