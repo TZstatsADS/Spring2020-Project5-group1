@@ -564,6 +564,8 @@ plot_points(data, test_condition, data_public)
 
 ## Step 11: Policy Implementation
 
+## Step 12: Track and isolate close contacts
+
 
 
 ## Step ?: Simulation
