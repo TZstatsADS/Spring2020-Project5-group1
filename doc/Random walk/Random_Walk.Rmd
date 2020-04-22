@@ -25,6 +25,9 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # pc: Probability of being infected
 # transform_probability: A data frame contains the probability of symptom changes
 # speed: A vector of movement speed of points with different symptoms
+# Num_public: A number indicates the number of public places
+# Hospital_capacity: A decimal indicates the ratio of hospital capacity
+
 
 N = 3000
 # R need to be decreasing
@@ -36,6 +39,8 @@ pc = 0.2
 transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.3,0.5,0.8))
 rownames(transform_probability) = 3:5
 speed = c(1, 1, 0.9, 0.6, 0.2, 0, 1)
+Num_public = 20
+Hospital_capacity = 0.01
 ```
 
 ```{r}
@@ -404,6 +409,100 @@ condition_change = function(condition, v, transform_probability, speed){
   return(list(new_condition, new_v))
 }
 ```
+
+## Step 7: Intialize public place
+
+```{r}
+random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
+  # R: Radiu
+  # class: A number indicates the category of public_place
+  # capacity: A number indicates the number of maximum points in this place
+  
+  if(length(R) != 1)
+    stop('Length of R is not 1 in random_public_place!')
+  if(!class %in% 1:3)
+    stop('Class is not right in random_public_place!')
+  if(capacity <= 0)
+    stop('Capacity is not right in random_public_place!')
+  
+  # class:
+  # 1: Hospital, To increase the probability of healing
+  # 2: Train Station: To let people leave and come
+  # 3: Restaurant/School/Supermarket: Crowded locations
+  
+  A = runif(1, 0 ,2*pi)
+  X = R*cos(A) + x_center
+  Y = R*sin(A) + y_center
+  return(data.frame(X = X, Y = Y, Class = class, Capacity = capacity))
+}
+```
+
+```{r}
+intialize_public_place = function(R, P, N, Num_public,Hospital_capacity){
+  # N: Total number of points
+  # R: A vector of radius
+  # P: A vector of the proportion of points in each ring area
+  # Num_public: A number indicates the number of public places
+  # Hospital_capacity: A decimal indicates the ratio of hospital capacity
+  
+  if(Num_public < 2)
+    stop('The number of public place is too less in intialize_public_place!')
+  if(Hospital_capacity > 1 | Hospital_capacity < 0)
+    stop('The capacity of hospital is wrong in intialize_public_place!')
+  
+  data_public = data.frame(X = NULL, Y = NULL, Class = NULL, Capacity = NULL)
+  
+  L = length(R)
+  population = P/sum(P)*N
+  S = R^2
+  area = S - c(S[2:L],0)
+  density = population/area
+  density = density/sum(density)
+  density_cumsum = c(0, cumsum(density))
+  
+  U = runif(1, 0, 1)
+  data_station = random_public_place(R[L]*U, 2, N/100)
+  data_public = rbind(data_public, data_station)
+  
+  num_hospital = ceiling((Num_public-1)/5)
+  num_school = Num_public - 1 - num_hospital
+  
+  build_public = function(class2, capacity2, num2){
+    
+    data_public2 = data.frame(X = NULL, Y = NULL, Class = NULL, Capacity = NULL)
+    
+    capacity_hospital_num = capacity2/num2
+    capacity_hospital_num = rnorm(num2, capacity_hospital_num, capacity_hospital_num/3)
+    capacity_hospital_num[capacity_hospital_num<1] = 1
+    capacity_hospital_num = round(capacity_hospital_num)
+    
+    U = runif(num2, 0 ,1)
+    pos_hospital = sapply(U, function(x) mean(x>density_cumsum)*(L+1))
+    
+    U = runif(num2, 0 ,1)
+    for(i in 1:num2){
+      R0 = c(R, 0)
+      R_i = (R0[pos_hospital[i]] - R0[pos_hospital[i]+1])*U[i] + R0[pos_hospital[i]+1]
+      data_hospital = random_public_place(R_i, class2, capacity_hospital_num[i])
+      data_public2 = rbind(data_public2, data_hospital)
+    }
+    return(data_public2)
+  }
+  
+  data_hospital = build_public(1, N*Hospital_capacity, num_hospital)
+  data_school = build_public(3, N*Hospital_capacity*10, num_school)
+  
+  data_public = rbind(data_public, data_hospital)
+  data_public = rbind(data_public, data_school)
+  
+  return(data_public)
+}
+```
+
+```{r}
+data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
+```
+
 
 
 ## Step ?: Simulation
