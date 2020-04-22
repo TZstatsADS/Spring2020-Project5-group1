@@ -7,6 +7,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ```{r}
 library(tidyverse)
 library(ggplot2)
@@ -16,6 +17,8 @@ library(proxy)
 
 my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
 ```
+
+## Step 0: Coefficient selection
 
 ```{r}
 # N: Total number of points
