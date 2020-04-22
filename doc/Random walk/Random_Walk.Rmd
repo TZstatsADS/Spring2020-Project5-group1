@@ -566,6 +566,8 @@ plot_points(data, test_condition, data_public)
 
 ## Step 12: Track and isolate close contacts
 
+## Step 13: Temporary hospital and doctors
+
 
 
 ## Step ?: Simulation
