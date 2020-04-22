@@ -38,7 +38,7 @@ R = c(40,30,20,10)
 # P should be the value corresponding to R
 P = c(1,2,3,4)
 Times = 60
-pc = 0.2
+pc = 0.1
 transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.3,0.5,0.8))
 rownames(transform_probability) = 3:5
 speed = c(1, 1, 0.9, 0.6, 0.2, 0, 1)
@@ -578,24 +578,32 @@ simulation_points = function(N, R, P, Times){
   Start_time = Sys.time()
   
   whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
+  # Step 1
   intialize = intialize_points(N, R, P)
   data = intialize[[1]]
+  # Step 5
   condition = data.frame(condition = rep(1, N), duration = rep(0, N))
   condition = initialize_infector(condition, 5)
+  
   whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
   
-  v = rnorm(N, 1, 0.5)
+  v = rnorm(N, 2, 0.8)
   v[v < 0] = 0
   
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
     condition$duration = condition$duration + 1
+    # Step 3
     new_data = random_walk(data, v)
+    # Step 4
     new_data = through_wall(data, new_data, R, alpha)
+    # Step 5
     condition = infection(new_data, v, condition)
+    # Step 6
     temp = condition_change(condition, v, transform_probability, speed)
     condition = temp[[1]]
     v = temp[[2]]
+    
     whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))
     data = new_data
   }
