@@ -335,18 +335,26 @@ infection = function(data, v, condition){
   
   distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
   
-  infection_radius = v[infection_index] * infection_speed[infection_index]
-  infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
+  infection_change = function(condition2, r = 1, pc){
+    
+    infection_radius = v[infection_index] * infection_speed[infection_index] * r
+    infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
+    
+    possible_infection = which(distance<infection_radius, arr.ind = TRUE)
+    possible_infection = possible_infection[,2] %>% unique()
   
-  possible_infection = which(distance<infection_radius, arr.ind = TRUE, useNames = TRUE)
-  possible_infection = possible_infection[,2] %>% unique()
+    U = runif(length(possible_infection), 0, 1)
   
-  U = runif(length(possible_infection), 0, 1)
+    confirmed_infection = possible_infection[U < pc]
+    confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
+    
+    condition2[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+    
+    return(condition2)
+  }
   
-  confirmed_infection = possible_infection[U<pc]
-  confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
-  
-  condition[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+  condition = infection_change(condition, 1, pc)
+  condition = infection_change(condition, 2, pc/4)
   
   return(condition)
 }
@@ -500,8 +508,58 @@ intialize_public_place = function(R, P, N, Num_public,Hospital_capacity){
 ```
 
 ```{r}
-data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
+plot_points = function(data, condition, data_public){
+  # data: A data frame contains X and Y in first 2 column
+  # condition: A vector contains 7 factors of illness
+  # data_public: A data frame contains X, Y, class and condition.
+  
+  c = colnames(data)
+  if(c[1] != 'X' | c[2] != 'Y')
+    stop('Wrong name in data in plot_points!')
+  
+  if(nrow(data) != length(condition %>% unlist))
+    stop('Wrong nrow of condition in plot_points!')
+  
+  data_public$Class = factor(data_public$Class, levels = 1:3, labels = c('Hospital', 'Station', 'Restaurant'))
+  
+  t = tibble(X = data$X, Y = data$Y, condition = factor(condition, levels = 1:7))
+  g = t %>%
+    ggplot(aes(x = X, y = Y, color = condition)) + 
+    geom_point(size = 0.1, alpha = 0.6) + 
+    geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity)/4, color = Class), alpha = 0.8) + 
+    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant'), name = 'Condition') +
+    scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
+    coord_fixed() + 
+    my_theme
+  g
+}
 ```
+
+```{r}
+# Condition meaning and color
+# 1: Healthy, '#00CC00', Electric Green
+# 2: Incubation period, '#FFCC00', Tangerine Yellow
+# 3: Moderate, '#FF69B4', Hot Pink
+# 4: Severe, '#DC143C', Crimson
+# 5: Cirtical, '#8B0000', Dark Red
+# 6: Death, '#000000', Black
+# 7: Cure, '#00CCFF', Deep Sky Blue
+# Hospital, '#FF0000', Red
+# Station, '#FF6600', Safety Orange
+# Restaurant, '#7FFFD4', Aquamarine
+
+
+data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
+plot_points(data, test_condition, data_public)
+```
+
+## Step 8: Close to public areas
+
+## Step 9: Hospital is working!
+
+## Step 10: We have doctor
+
+## Step 11: Policy Implementation
 
 
 
@@ -561,13 +619,18 @@ whole_data = simulation_points(N, R, P, Times)
 ## Step ?: Generate gganimate gif
 
 ```{r}
-generate_gif = function(whole_data){
+generate_gif = function(whole_data, data_public){
   # whole_data: A data.frame contains X, Y, Condition and Time
+  # data_public: A data frame contains X, Y, class and condition.
+  
+  data_public$Class = factor(data_public$Class, levels = 1:3, labels = c('Hospital', 'Station', 'Restaurant'))
   
   p = whole_data %>% 
     ggplot(aes(x = X, y = Y, color = factor(Condition, levels = 1:7), group = 1L)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
-    scale_color_manual(values = c('#00CC00', '#FFCC00', '#FF69B4', '#DC143C', '#8B0000', '#000000', '#00CCFF'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure'), name = 'Condition') +  
+    geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
+    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant'), name = 'Condition') +  
+    scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
     coord_fixed() + 
     transition_time(Time) + 
     ease_aes('linear') + 
@@ -580,7 +643,7 @@ generate_gif = function(whole_data){
 ```
 
 ```{r}
-generate_gif(whole_data)
+generate_gif(whole_data, data_public)
 ```
 
 
