@@ -761,12 +761,14 @@ simulation_points = function(N, R, P, Times){
   print(End_time-Start_time)
   cat('\n')
   
-  return(whole_data)
+  return(list(whole_data, data_public))
 }
 ```
 
 ```{r}
-whole_data = simulation_points(N, R, P, Times)
+temp= simulation_points(N, R, P, Times)
+whole = temp[[1]]
+data_public = temp[[2]]
 ```
 
 ## Step ?: Generate gganimate gif
