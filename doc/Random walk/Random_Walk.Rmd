@@ -308,7 +308,7 @@ pairwise_dist = function(data1, data2){
 ```
 
 ```{r}
-infection = function(data, v, condition){
+infection = function(data, v, condition, infectious_ability){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
   # condition: A data frame contains the condition of points, from 1 to 7, and duration.
@@ -338,9 +338,9 @@ infection = function(data, v, condition){
   
   distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
   
-  infection_change = function(condition2, r = 1, pc){
+  infection_change = function(condition2,infectious_ability2, pc){
     
-    infection_radius = v[infection_index] * infection_speed[infection_index] * r
+    infection_radius = v[infection_index] * infection_speed[infection_index] * infectious_ability2[infection_index]
     infection_radius = matrix(rep(infection_radius, canbe_infected_length), nr = infection_length)
     
     possible_infection = which(distance<infection_radius, arr.ind = TRUE)
@@ -356,8 +356,8 @@ infection = function(data, v, condition){
     return(condition2)
   }
   
-  condition = infection_change(condition, 1, pc)
-  condition = infection_change(condition, 2, pc/4)
+  condition = infection_change(condition, infectious_ability, pc)
+  condition = infection_change(condition, infectious_ability*2, pc/4)
   
   return(condition)
 }
@@ -562,11 +562,13 @@ plot_points(data, test_condition, data_public)
 
 ## Step 10: We have doctor
 
-## Step 11: Policy Implementation
+## Step 11: Train station bring virus
 
-## Step 12: Track and isolate close contacts
+## Step 12: Temporary hospital and doctors
 
-## Step 13: Temporary hospital and doctors
+## Step 13: Policy Implementation
+
+## Step 14: Track and quarantine close contacts
 
 
 
@@ -590,9 +592,11 @@ simulation_points = function(N, R, P, Times){
   condition = initialize_infector(condition, 5)
   
   whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
-  
+  # Step 3
   v = rnorm(N, 2, 0.8)
   v[v < 0] = 0
+  # Step 5
+  infectious_ability = rep(1, N)
   
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
@@ -602,7 +606,7 @@ simulation_points = function(N, R, P, Times){
     # Step 4
     new_data = through_wall(data, new_data, R, alpha)
     # Step 5
-    condition = infection(new_data, v, condition)
+    condition = infection(new_data, v, condition, infectious_ability)
     # Step 6
     temp = condition_change(condition, v, transform_probability, speed)
     condition = temp[[1]]
