@@ -7,7 +7,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
 ```{r}
 library(tidyverse)
 library(ggplot2)
@@ -285,7 +284,6 @@ through_wall = function(last_data, new_data, R, alpha){
 }
 ```
 
-
 ## Step 5: Infection
 
 ```{r}
@@ -454,7 +452,7 @@ random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
 ```
 
 ```{r}
-intialize_public_place = function(R, P, N, Num_public,Hospital_capacity){
+intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -477,7 +475,7 @@ intialize_public_place = function(R, P, N, Num_public,Hospital_capacity){
   density_cumsum = c(0, cumsum(density))
   
   U = runif(1, 0, 1)
-  data_station = random_public_place(R[L]*U, 2, N/100)
+  data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100)
   data_public = rbind(data_public, data_station)
   
   num_hospital = ceiling((Num_public-1)/5)
@@ -670,16 +668,33 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 
 ## Step 11: We have doctors
 
-## Step 12: Train station bring virus
+## Step 12: Temporary hospital and doctors
 
-## Step 13: Temporary hospital and doctors
+## Step 13: Policy implementation
 
-## Step 14: Policy Implementation
+### Masks
 
-## Step 15: Track and quarantine close contacts
+### Social distancing
 
+### Quarantine
 
+### Close station
 
+### Close restaurant
+
+## Step 14: Track and quarantine close contacts
+
+## Step 15: Train station bring virus
+
+## Step 16: More cities
+
+## Step 17: Travel to another city
+
+## Step 18: Recrudesce
+
+## Step 19: Virus mutation
+
+## Step 20: Vaccine
 
 
 ## Step ?: Simulation
