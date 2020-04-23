@@ -697,6 +697,7 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 ## Step 20: Vaccine
 
 
+
 ## Step ?: Simulation
 
 ```{r}
