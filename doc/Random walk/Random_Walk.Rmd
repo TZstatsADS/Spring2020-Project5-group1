@@ -235,14 +235,14 @@ plot_points(new_data, test_condition)
 ## Step 4: Build the wall
 
 ```{r}
-through_wall = function(last_data, new_data, R, alpha){
+through_wall = function(last_data, new_data, R, alpha, x_center = 0, y_center = 0){
   # last_data: A data frame contains X and Y which is last position
   # new_data: A data frame contains X and Y which is new position
   # R: A vector of radius
   # alpha: A vector of probability of being able to get out of the wall
   
-  last_R = sqrt(last_data$X^2 + last_data$Y^2)
-  new_R = sqrt(new_data$X^2 + new_data$Y^2)
+  last_R = sqrt((last_data$X-x_center)^2 + (last_data$Y-y_center)^2)
+  new_R = sqrt((new_data$X-x_center)^2 + (new_data$Y-y_center)^2)
   
   R0 = c(Inf, R, 0)
   last_R0 = cut(last_R, breaks = R0, labels = (length(R)+1):1) %>% as.numeric()
@@ -278,7 +278,9 @@ through_wall = function(last_data, new_data, R, alpha){
   ratio = (1-2*rest_distance/new_R[index_run])
   ratio = ifelse(ratio < -0.5, -0.5, ratio)
   
-  new_data[index_run,] = new_data[index_run,] * ratio
+  length_run = length(index_run)
+  center = data.frame(X = rep(x_center, length_run), Y = rep(y_center, length_run))
+  new_data[index_run,] = (new_data[index_run,]-center) * ratio + center
   
   return(new_data)
 }
@@ -434,7 +436,7 @@ random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
   
   if(length(R) != 1)
     stop('Length of R is not 1 in random_public_place!')
-  if(!class %in% 1:3)
+  if(!class %in% 1:4)
     stop('Class is not right in random_public_place!')
   if(capacity <= 0)
     stop('Capacity is not right in random_public_place!')
@@ -443,6 +445,7 @@ random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
   # 1: Hospital, To increase the probability of healing
   # 2: Train Station: To let people leave and come
   # 3: Restaurant/School/Supermarket: Crowded locations
+  # 4：Hotel: To quarantine close contacts
   
   A = runif(1, 0 ,2*pi)
   X = R*cos(A) + x_center
@@ -478,8 +481,9 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
   data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100)
   data_public = rbind(data_public, data_station)
   
-  num_hospital = ceiling((Num_public-1)/5)
-  num_school = Num_public - 1 - num_hospital
+  num_hospital = ceiling((Num_public-1)/6)
+  num_hotel = round((Num_public-1)/3)
+  num_school = Num_public - 1 - num_hospital - num_hotel
   
   build_public = function(class2, capacity2, num2){
     
@@ -505,9 +509,11 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
   
   data_hospital = build_public(1, N*Hospital_capacity, num_hospital)
   data_school = build_public(3, N*Hospital_capacity*10, num_school)
+  data_hotel = build_public(4, N*Hospital_capacity*3, num_hotel)
   
   data_public = rbind(data_public, data_hospital)
   data_public = rbind(data_public, data_school)
+  data_public = rbind(data_public, data_hotel)
   
   data_public = cbind(data_public, Current = 0, Index = 1:nrow(data_public))
   
@@ -528,14 +534,14 @@ plot_points = function(data, condition, data_public){
   if(nrow(data) != length(condition %>% unlist))
     stop('Wrong nrow of condition in plot_points!')
   
-  data_public$Class = factor(data_public$Class, levels = 1:3, labels = c('Hospital', 'Station', 'Restaurant'))
+  data_public$Class = factor(data_public$Class, levels = 1:4, labels = c('Hospital', 'Station', 'Restaurant', 'Hotel'))
   
   t = tibble(X = data$X, Y = data$Y, condition = factor(condition, levels = 1:7))
   g = t %>%
     ggplot(aes(x = X, y = Y, color = condition)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
     geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
-    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant'), name = 'Condition') +
+    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
     scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
     coord_fixed() + 
     my_theme
@@ -555,7 +561,7 @@ plot_points = function(data, condition, data_public){
 # Hospital, '#FF0000', Red
 # Station, '#FF6600', Safety Orange
 # Restaurant, '#7FFFD4', Aquamarine
-
+# Hotel, '#CC99CC', Lilac
 
 data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
 plot_points(data, test_condition, data_public)
@@ -783,7 +789,7 @@ simulation_points = function(N, R, P, Times){
 
 ```{r}
 temp= simulation_points(N, R, P, Times)
-whole = temp[[1]]
+whole_data = temp[[1]]
 data_public = temp[[2]]
 ```
 
@@ -794,13 +800,13 @@ generate_gif = function(whole_data, data_public){
   # whole_data: A data.frame contains X, Y, Condition and Time
   # data_public: A data frame contains X, Y, class and condition.
   
-  data_public$Class = factor(data_public$Class, levels = 1:3, labels = c('Hospital', 'Station', 'Restaurant'))
+  data_public$Class = factor(data_public$Class, levels = 1:4, labels = c('Hospital', 'Station', 'Restaurant', 'Hotel'))
   
   p = whole_data %>% 
     ggplot(aes(x = X, y = Y, color = factor(Condition, levels = 1:7), group = 1L)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
     geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
-    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant'), name = 'Condition') +  
+    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
     scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
     coord_fixed() + 
     transition_time(Time) + 
