@@ -141,6 +141,10 @@ intialize_points = function(N, R, P){
     }
 
   }
+  if(nrow(data)<N)
+    data = rbind(data, random_point_circle(R[1], N-nrow(data)))
+  else
+    data = data[1:N,]
   
   return(list(data, number_of_points))
 }
