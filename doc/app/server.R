@@ -14,19 +14,25 @@ library(shinydashboard)
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
     
-    autoInvalidate <- reactiveTimer(500)
+    session = reactiveValues()
+    session$timer = reactiveTimer(Inf)
     
-    data = reactiveVal(NULL)
-    new_data = reactiveVal(NULL)
-    condition = reactiveVal(NULL)
-    v = reactiveVal(NULL)
-    infectious_ability = reactiveVal(NULL)
-    protection_ability = reactiveVal(NULL)
-    data_public = reactiveVal(NULL)
-    people_duration = reactiveVal(NULL)
-    before_place_info = reactiveVal(NULL)
+    current = reactiveValues()
     
-    observeEvent(input$change_N,{
+    current$data = NULL
+    current$new_data = NULL
+    current$condition = NULL
+    current$v = NULL
+    current$infectious_ability = NULL
+    current$protection_ability = NULL
+    current$data_public = NULL
+    current$people_duration = NULL
+    current$before_place_info = NULL
+    
+    initialize = function(){
+        
+        req(input$N)
+        
         intialize = intialize_points(input$N, R, P)
         data2 = intialize[[1]]
         
@@ -38,74 +44,86 @@ shinyServer(function(input, output) {
         
         
         infectious_ability2 = rep(1, input$N)
-
+        
         protection_ability2 = rnorm(input$N, 1, 0.3)
         protection_ability2[protection_ability2 < 0.05] = 0.05
         protection_ability2[protection_ability2 > 1] = 1
-
-        data_public2 = intialize_public_place(R, P, input$N, Num_public, Hospital_capacity)
-
-        people_duration2 = data.frame(place = rep(0, input$N), place_index = rep(0, input$N), duration = rep(0, input$N))
-
-        before_place_info2 = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
-
-        data(data2)
-        new_data(data2)
-        condition(condition2)
-        v(v2)
-        infectious_ability(infectious_ability2)
-        protection_ability(protection_ability2)
-        data_public(data_public2)
-        people_duration(people_duration2)
-        before_place_info(before_place_info2)
         
+        data_public2 = intialize_public_place(R, P, input$N, Num_public, Hospital_capacity)
+        
+        people_duration2 = data.frame(place = rep(0, input$N), place_index = rep(0, input$N), duration = rep(0, input$N))
+        
+        before_place_info2 = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
+        
+        current$data = data2
+        current$new_data = data2
+        current$condition = condition2
+        current$v = v2
+        current$infectious_ability = infectious_ability2
+        current$protection_ability = protection_ability2
+        current$data_public = data_public2
+        current$people_duration = people_duration2
+        current$before_place_info = before_place_info2
+    }
+
+    forward = function(){
+        
+        current$condition$duration = current$condition$duration + 1
+
+        current$people_duration$duration = current$people_duration$duration + 1
+        
+        # Step 3
+        current$new_data = random_walk(current$data, current$v)
+        # Step 4
+        current$new_data = through_wall(current$data, current$new_data, R, alpha)
+        # Step 5
+        current$condition = infection(current$new_data, current$v, current$condition, current$infectious_ability, current$protection_ability)
+        # Step 6
+        temp = condition_change(current$condition, current$v, transform_probability, speed)
+        current$condition = temp[[1]]
+        current$v = temp[[2]]
+        # Step 8
+        temp = moveto_restaurant(current$data, current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
+        current$new_data = temp[[1]]
+        current$before_place_info = temp[[2]]
+        current$v = temp[[3]]
+        current$data_public = temp[[4]]
+        current$people_duration = temp[[5]]
+        # Step 9
+        temp = outof_restaurant(current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
+        current$new_data = temp[[1]]
+        current$before_place_info = temp[[2]]
+        current$v = temp[[3]]
+        current$data_public = temp[[4]]
+        current$people_duration = temp[[5]]
+        
+        current$data = current$new_data
+    }
+    
+    observeEvent(input$Start, {
+        initialize()
     })
     
-    observeEvent(autoInvalidate(), {
-        if(is.null(data())) return()
-        
-        condition2 = condition()
-        condition2$duration = condition2$duration + 1
-        condition(condition2)
-
-        people_duration2 = people_duration()
-        people_duration2$duration = people_duration2$duration + 1
-        people_duration(people_duration2)
-
-        # Step 3
-        new_data2 = random_walk(data(), v())
-        new_data(new_data2)
-        # Step 4
-        new_data2 = through_wall(data(), new_data(), R, alpha)
-        new_data(new_data2)
-        # Step 5
-        condition2 = infection(new_data(), v(), condition(), infectious_ability(), protection_ability())
-        condition(condition2)
-        # Step 6
-        temp = condition_change(condition(), v(), transform_probability, speed)
-        condition(temp[[1]])
-        v(temp[[2]])
-        # Step 8
-        temp = moveto_restaurant(data(), new_data(), data_public(), people_duration(), before_place_info(), v(), condition())
-        new_data(temp[[1]])
-        before_place_info(temp[[2]])
-        v(temp[[3]])
-        data_public(temp[[4]])
-        people_duration(temp[[5]])
-        # Step 9
-        temp = outof_restaurant(new_data(), data_public(), people_duration(), before_place_info(), v(), condition())
-        new_data(temp[[1]])
-        before_place_info(temp[[2]])
-        v(temp[[3]])
-        data_public(temp[[4]])
-        people_duration(temp[[5]])
-        data(new_data())
+    observeEvent(input$Next, {
+        forward()
+    })
+    
+    observeEvent(input$Auto,{
+        session$timer<-reactiveTimer(1000)
+        observeEvent(session$timer(),{
+            forward()
+        })
+    })
+    
+    observeEvent(input$Stop,{
+        session$timer<-reactiveTimer(Inf)
     })
     
     output$Simulation <- renderPlot({
-        if(is.null(data())) return()
         
-        plot_points(data(), condition(), data_public())
+        if(is.null(current$data)) return()
+        
+        plot_points(current$data, current$condition, current$data_public)
 
     })
     

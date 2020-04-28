@@ -1,47 +1,21 @@
 
 
 library(shiny)
-library(shinydashboard)
-
-header <- dashboardHeader(title='Random Walk')
-
-sidebar <- dashboardSidebar(
-    sidebarMenu(
-        menuItem('Home', 
-                 tabName = 'Home', 
-                 icon = icon('home')
-        )
-    )
+ui <- fluidPage(
+        titlePanel("Simulation"),
+        sliderInput(inputId = 'N', 
+                    label = 'Number of points', 
+                    value = 3000, 
+                    min = 300, 
+                    max = 10000),
+        actionButton(inputId = 'Start',
+                     label = 'Start'),
+        actionButton(inputId = 'Next', 
+                     label = 'Next day'),
+        actionButton(inputId = 'Auto', 
+                     label = 'Auto'),
+        actionButton(inputId = 'Stop', 
+                     label = 'Stop'),
+        plotOutput("Simulation"),
 )
 
-body <- dashboardBody(
-    tags$head(
-       
-    ),
-    tabItems(
-        # Home
-        tabItem(tabName='Home',
-                fluidPage(
-                    
-                    # Application title
-                    titlePanel("Simulation"),
-                    # Show a plot of the generated distribution
-                    sliderInput(inputId = 'N', 
-                                label = 'Number of points', 
-                                value = 3000, 
-                                min = 300, 
-                                max = 10000),
-                    actionButton(inputId = 'change_N', 
-                                 label = 'Select N'),
-                    plotOutput("Simulation"),
-                )
-        )
-    )
-)
-    
-ui <- dashboardPage(
-    skin='black',
-    header=header,
-    sidebar=sidebar,
-    body=body
-)
