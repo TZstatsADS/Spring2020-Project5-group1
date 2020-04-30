@@ -128,10 +128,10 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$Stop,{
-        session$timer<-reactiveTimer(Inf)
+        session$timer = reactiveTimer(Inf)
     })
     
-    output$Simulation <- renderPlot({
+    output$Simulation = renderPlot({
         
         if(is.null(current$data)) return()
         
