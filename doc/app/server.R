@@ -16,9 +16,9 @@ shinyServer(function(input, output) {
     
     session = reactiveValues()
     session$timer = reactiveTimer(Inf)
+    session$whole_data = NULL
     
     current = reactiveValues()
-    
     current$data = NULL
     current$new_data = NULL
     current$condition = NULL
@@ -28,9 +28,13 @@ shinyServer(function(input, output) {
     current$data_public = NULL
     current$people_duration = NULL
     current$before_place_info = NULL
+    current$Time = NULL
     
     initialize = function(){
         
+        session$whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
+        
+        req(input$Num_public)
         req(input$N)
         
         intialize = intialize_points(input$N, R, P)
@@ -42,14 +46,13 @@ shinyServer(function(input, output) {
         v2 = rnorm(input$N, 2, 0.8)
         v2[v2 < 0] = 0
         
-        
         infectious_ability2 = rep(1, input$N)
         
         protection_ability2 = rnorm(input$N, 1, 0.3)
         protection_ability2[protection_ability2 < 0.05] = 0.05
         protection_ability2[protection_ability2 > 1] = 1
         
-        data_public2 = intialize_public_place(R, P, input$N, Num_public, Hospital_capacity)
+        data_public2 = intialize_public_place(R, P, input$N, input$Num_public, Hospital_capacity)
         
         people_duration2 = data.frame(place = rep(0, input$N), place_index = rep(0, input$N), duration = rep(0, input$N))
         
@@ -64,10 +67,14 @@ shinyServer(function(input, output) {
         current$data_public = data_public2
         current$people_duration = people_duration2
         current$before_place_info = before_place_info2
+        current$Time = 0
+        
+        session$whole_data = rbind(session$whole_data, cbind(current$data, Condition = current$condition$condition, Time = rep(0, input$N)))
     }
 
     forward = function(){
         
+        current$Time = current$Time + 1
         current$condition$duration = current$condition$duration + 1
 
         current$people_duration$duration = current$people_duration$duration + 1
@@ -97,7 +104,10 @@ shinyServer(function(input, output) {
         current$data_public = temp[[4]]
         current$people_duration = temp[[5]]
         
+        session$whole_data = rbind(session$whole_data, cbind(current$new_data, Condition = current$condition$condition, Time = rep(current$Time, nrow(current$data))))
+        
         current$data = current$new_data
+        
     }
     
     observeEvent(input$Start, {
@@ -109,8 +119,10 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$Auto,{
-        session$timer<-reactiveTimer(1000)
+        session$timer = reactiveTimer(1000)
         observeEvent(session$timer(),{
+            if(is.null(current$data)) 
+                initialize()
             forward()
         })
     })
@@ -126,5 +138,14 @@ shinyServer(function(input, output) {
         plot_points(current$data, current$condition, current$data_public)
 
     })
+    
+    output$downloadgif = downloadHandler(
+        filename = function() {
+            paste0(input$gifname, '.gif')
+        },
+        content = function(file) {
+            generate_gif(session$whole_data, current$data_public, current$Time, file)
+        }
+    )
     
 })

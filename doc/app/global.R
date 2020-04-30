@@ -60,6 +60,31 @@ calculate_alpha = function(N, R, P, c){
 # To let the number of points in each ring after 300 runnings is still the same 
 alpha = calculate_alpha(N, R, P, 1.25)
 
+########## Step 0 
+
+generate_gif = function(whole_data, data_public, Times, file){
+  # whole_data: A data.frame contains X, Y, Condition and Time
+  # data_public: A data frame contains X, Y, class and condition.
+  
+  data_public$Class = factor(data_public$Class, levels = 1:4, labels = c('Hospital', 'Station', 'Restaurant', 'Hotel'))
+  
+  p = whole_data %>% 
+    ggplot(aes(x = X, y = Y, color = factor(Condition, levels = 1:7), group = 1L)) + 
+    geom_point(size = 0.1, alpha = 0.6) + 
+    geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
+    scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
+    scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
+    coord_fixed() + 
+    transition_time(Time) + 
+    ease_aes('linear') + 
+    my_theme
+  
+  
+  image <- animate(p, fps = 10, nframes = Times * 4)
+  image_write(image, file)
+}
+
+
 ########## Step 1
 
 random_point_circle = function(R, N, x_center = 0, y_center = 0){
