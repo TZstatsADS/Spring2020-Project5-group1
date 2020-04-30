@@ -278,7 +278,7 @@ pairwise_dist = function(data1, data2){
   return(Dist_matrix)
 }
 
-infection = function(data, v, condition, infectious_ability, protection_ability){
+infection = function(data, v, condition, infectious_ability, protection_ability, pc){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
   # condition: A vector contains 7 factors of illness and its duration

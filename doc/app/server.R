@@ -84,7 +84,7 @@ shinyServer(function(input, output) {
         # Step 4
         current$new_data = through_wall(current$data, current$new_data, R, alpha)
         # Step 5
-        current$condition = infection(current$new_data, current$v, current$condition, current$infectious_ability, current$protection_ability)
+        current$condition = infection(current$new_data, current$v, current$condition, current$infectious_ability, current$protection_ability, input$pc)
         # Step 6
         temp = condition_change(current$condition, current$v, transform_probability, speed)
         current$condition = temp[[1]]
