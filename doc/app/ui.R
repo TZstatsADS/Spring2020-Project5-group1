@@ -3,6 +3,7 @@
 library(shiny)
 ui <- fluidPage(
         titlePanel("Simulation"),
+        
         sliderInput(inputId = 'N', 
                     label = 'Number of points', 
                     value = 3000, 
@@ -30,6 +31,7 @@ ui <- fluidPage(
         actionButton(inputId = 'Stop', 
                      label = 'Stop'),
         downloadButton("downloadgif", "Download"),
-        plotOutput("Simulation"),
+        plotOutput("Simulation")
+
 )
 

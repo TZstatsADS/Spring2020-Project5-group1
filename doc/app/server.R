@@ -32,10 +32,10 @@ shinyServer(function(input, output) {
     
     initialize = function(){
         
-        session$whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
-        
         req(input$Num_public)
         req(input$N)
+        
+        session$whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
         
         intialize = intialize_points(input$N, R, P)
         data2 = intialize[[1]]
@@ -115,6 +115,8 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$Next, {
+        if(is.null(current$data)) 
+            initialize()
         forward()
     })
     

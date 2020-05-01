@@ -29,7 +29,7 @@ P = c(1,2,3,4)
 Times = 60
 pc = 0.1
 pr = 0.4
-transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.3,0.5,0.8))
+transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.2,0.3,0.5))
 rownames(transform_probability) = 3:5
 min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
@@ -381,7 +381,7 @@ condition_change = function(condition, v, transform_probability, speed){
   new_condition = temp[[1]]
   new_v = temp[[2]]
   
-  temp = symptom_change(condition, v, new_condition, new_v, 5, 6, 4)
+  temp = symptom_change(condition, v, new_condition, new_v, 5, 4, 6)
   new_condition = temp[[1]]
   new_v = temp[[2]]
   
