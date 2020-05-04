@@ -31,7 +31,7 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # speed: A vector of movement speed of points with different symptoms
 # Num_public: A number indicates the number of public places
 # Hospital_capacity: A decimal indicates the ratio of hospital capacity
-
+# vacstart: A number of the start day of vaccine
 
 N = 3000
 # R need to be decreasing
@@ -47,6 +47,7 @@ min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
 Num_public = 20
 Hospital_capacity = 0.01
+vacstart = 12
 ```
 
 ```{r}
@@ -316,7 +317,7 @@ pairwise_dist = function(data1, data2){
 ```
 
 ```{r}
-infection = function(data, v, condition, infectious_ability, protection_ability){
+infection = function(data, v, condition, infectious_ability, protection_ability, pc){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
   # condition: A vector contains 7 factors of illness and its duration
@@ -702,9 +703,48 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 
 ## Step 18: Recrudesce
 
-## Step 19: Virus mutation
+```{r}
+recrudesce<-function(condition, vaccine){
+  cured<-which(condition$condition == 7 & condition$duration > 3)
+  l<-length(cured)
+  
+  if(l==0 | vaccine){
+    return(condition)
+  }
+  else{
+    condition.recrudesce<-sample(c(1, 3:5, 7), l , replace = T, prob = c(0.02, 0.01, 0.009, 0.001, 0.96))
+    condition$condition[cured]<-condition.recrudesce
+    index<-which(condition$condition[cured] != 7)
+    condition$duration[index]<-0
+    
+    return(condition)
+  }
+}
+```
 
-## Step 20: Vaccine
+## Step 19: Vaccine
+
+```{r}
+vaccine<-function(condition, protection_ability){
+  index<-which(condition$condition %in% c(1,2) & protection_ability>0)
+  n<-length(index)
+  
+  if(n==0){
+    return(protection_ability)
+  }
+  
+  else{
+    vaccine<-sample(0:1,n, replace = T, prob=c(0.7, 0.3))
+    condition<-cbind(condition, vac=rep(0, nrow(condition)))
+    condition[index,]$vac<-vaccine
+    
+    protection_ability[which(condition$vac==1)]<-0.05
+    
+    return(protection_ability)
+  }
+}
+```
+
 
 
 
@@ -742,6 +782,9 @@ simulation_points = function(N, R, P, Times){
   people_duration = data.frame(place = rep(0, N), place_index = rep(0, N), duration = rep(0, N))
   before_place_info = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
   
+  # Step 19
+  vacday = 0
+  
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
     condition$duration = condition$duration + 1
@@ -751,7 +794,7 @@ simulation_points = function(N, R, P, Times){
     # Step 4
     new_data = through_wall(data, new_data, R, alpha)
     # Step 5
-    condition = infection(new_data, v, condition, infectious_ability, protection_ability)
+    condition = infection(new_data, v, condition, infectious_ability, protection_ability, pc)
     # Step 6
     temp = condition_change(condition, v, transform_probability, speed)
     condition = temp[[1]]
@@ -770,6 +813,16 @@ simulation_points = function(N, R, P, Times){
     v = temp[[3]] 
     data_public = temp[[4]]
     people_duration = temp[[5]]
+    
+    
+    # Step 18
+    condition = recrudesce(condition, vacday > vacstart)
+    # Step 19
+    if(t > 20){
+      vacday = vacday + 1
+      if(vacday > vacstart)
+        protection_ability = vaccine(condition, protection_ability)
+    }
     
     
     whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))

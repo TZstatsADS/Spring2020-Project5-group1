@@ -17,7 +17,6 @@ shinyServer(function(input, output) {
     session = reactiveValues()
     session$timer = reactiveTimer(Inf)
     session$whole_data = NULL
-    session$mutation = NULL
     session$vaccine = NULL
     session$vacstart = NULL
     
@@ -114,9 +113,6 @@ shinyServer(function(input, output) {
         # Step 18
         current$condition = recrudesce(current$condition, current$vacday > session$vacstart)
         # Step 19
-        if(input$mutation)
-            current$condition = mutation(current$condition)
-        # Step 20
         if(input$vaccine){
             current$vacday = current$vacday + 1
             if(current$vacday > session$vacstart)
@@ -159,12 +155,6 @@ shinyServer(function(input, output) {
             initialize()
         for(i in 1:input$SkipNum)
             forward()
-    })
-    
-    
-    observeEvent(input$mutation,{ 
-        if(input$mutation)
-            session$mutation = current$Time
     })
     
     observeEvent(input$vaccine, {

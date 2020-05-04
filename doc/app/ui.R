@@ -43,8 +43,6 @@ ui <- fluidPage(
                     value = 0.1, 
                     min = 0, 
                     max = 1),
-        checkboxInput(inputId = 'mutation', 
-                      label = 'Virus Mutation'),
         checkboxInput(inputId = 'vaccine', 
                       label = 'R & D vaccine'),
         textInput(inputId = 'gifname', 

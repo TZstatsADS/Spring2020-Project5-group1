@@ -592,7 +592,7 @@ recrudesce<-function(condition, vaccine){
     return(condition)
   }
   else{
-    condition.recrudesce<-sample(c(1, 3:5, 7), l , replace = T, prob = c(0.01, 0.01, 0.009, 0.001, 0.97))
+    condition.recrudesce<-sample(c(1, 3:5, 7), l , replace = T, prob = c(0.02, 0.01, 0.009, 0.001, 0.96))
     condition$condition[cured]<-condition.recrudesce
     index<-which(condition$condition[cured] != 7)
     condition$duration[index]<-0
@@ -601,30 +601,7 @@ recrudesce<-function(condition, vaccine){
   }
 }
 
-######## Step 19
-
-mutation<-function(condition){
-  n<-nrow(condition)
-  condition.mutate<-sample(1:7, n, replace = T )
-  condition.new<-rep(0, n)
-  
-  condition.new[which(condition$condition==7 & condition.mutate==7)]<-7
-  condition.new[which(condition$condition==7 & condition.mutate==1)]<-1
-  condition.new[which(condition$condition==1 & condition.mutate==7)]<-1
-  condition.new[which(condition$condition==6 | condition.mutate==6)]<-6
-  
-  index<-which(condition.new==0)
-  condition.new[index]<-condition$condition[index] + condition.mutate[index] -1
-  condition.new[index]<-ifelse(condition.new[index]>6, 6, condition.new[index])
-  
-  index.diff<-which(condition$condition != condition.new)
-  condition$duration[index.diff]<-0
-  condition$condition<-condition.new
-  
-  return(condition)
-}
-
-########## Step 20
+########## Step 19
 
 vaccine<-function(condition, protection_ability){
   index<-which(condition$condition %in% c(1,2) & protection_ability>0)
