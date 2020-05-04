@@ -35,7 +35,7 @@ min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
 Num_public = 20
 Hospital_capacity = 0.01
-warnings('off')
+options(warn =-1)
 
 
 calculate_alpha = function(N, R, P, c){
