@@ -55,6 +55,7 @@ ui <- fluidPage(
         textOutput("Infected"),
         textOutput("Death"),
         textOutput("Cured"),
+        textOutput("All"),
         )
         )
 )

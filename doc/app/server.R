@@ -194,6 +194,7 @@ shinyServer(function(input, output) {
     output$Cured = renderText(
         paste0('Cured:', sum(current$condition$condition == 7))
     )
+    
 })
 
 
