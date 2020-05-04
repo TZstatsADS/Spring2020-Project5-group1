@@ -17,6 +17,9 @@ shinyServer(function(input, output) {
     session = reactiveValues()
     session$timer = reactiveTimer(Inf)
     session$whole_data = NULL
+    session$mutation = NULL
+    session$vaccine = NULL
+    session$vacstart = NULL
     
     current = reactiveValues()
     current$data = NULL
@@ -29,6 +32,7 @@ shinyServer(function(input, output) {
     current$people_duration = NULL
     current$before_place_info = NULL
     current$Time = NULL
+    current$vacday = NULL
     
     initialize = function(){
         
@@ -68,7 +72,9 @@ shinyServer(function(input, output) {
         current$people_duration = people_duration2
         current$before_place_info = before_place_info2
         current$Time = 0
+        current$vacday = 0
         
+        session$vacstart = runif(1, 8, 15)
         session$whole_data = rbind(session$whole_data, cbind(current$data, Condition = current$condition$condition, Time = rep(0, input$N)))
     }
 
@@ -104,6 +110,21 @@ shinyServer(function(input, output) {
         current$data_public = temp[[4]]
         current$people_duration = temp[[5]]
         
+        
+        # Step 18
+        current$condition = recrudesce(current$condition, current$vacday > session$vacstart)
+        # Step 19
+        if(input$mutation)
+            current$condition = mutation(current$condition)
+        # Step 20
+        if(input$vaccine){
+            current$vacday = current$vacday + 1
+            if(current$vacday > session$vacstart)
+                current$protection_ability = vaccine(current$condition, current$protection_ability)
+        }
+        
+        
+        
         session$whole_data = rbind(session$whole_data, cbind(current$new_data, Condition = current$condition$condition, Time = rep(current$Time, nrow(current$data))))
         
         current$data = current$new_data
@@ -133,6 +154,26 @@ shinyServer(function(input, output) {
         session$timer = reactiveTimer(Inf)
     })
     
+    observeEvent(input$Skip,{
+        if(is.null(current$data)) 
+            initialize()
+        for(i in 1:input$SkipNum)
+            forward()
+    })
+    
+    
+    observeEvent(input$mutation,{ 
+        if(input$mutation)
+            session$mutation = current$Time
+    })
+    
+    observeEvent(input$vaccine, {
+        if(input$vaccine)
+            session$vaccine = current$Time
+    })
+    
+    
+    
     output$Simulation = renderPlot({
         
         if(is.null(current$data)) return()
@@ -150,4 +191,27 @@ shinyServer(function(input, output) {
         }
     )
     
+
+    
+    output$Infected = renderText(
+        paste0('Infected:', sum(current$condition$condition %in% c(2:5)))
+    )
+    
+    output$Death = renderText(
+        paste0('Death:', sum(current$condition$condition == 6))
+    )
+    
+    output$Cured = renderText(
+        paste0('Cured:', sum(current$condition$condition == 7))
+    )
 })
+
+
+
+
+
+
+
+
+
+

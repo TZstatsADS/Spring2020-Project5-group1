@@ -29,7 +29,7 @@ P = c(1,2,3,4)
 Times = 60
 pc = 0.1
 pr = 0.4
-transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.2,0.3,0.5))
+transform_probability = data.frame(ease = c(0.3,0.2,0.1), worsen = c(0.2,0.2,0.3))
 rownames(transform_probability) = 3:5
 min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
@@ -579,6 +579,71 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
 }
 
 
+
+
+
+########## Step 18
+
+recrudesce<-function(condition, vaccine){
+  cured<-which(condition$condition == 7 & condition$duration > 3)
+  l<-length(cured)
+  
+  if(l==0 | vaccine){
+    return(condition)
+  }
+  else{
+    condition.recrudesce<-sample(c(1, 3:5, 7), l , replace = T, prob = c(0.01, 0.01, 0.009, 0.001, 0.97))
+    condition$condition[cured]<-condition.recrudesce
+    index<-which(condition$condition[cured] != 7)
+    condition$duration[index]<-0
+    
+    return(condition)
+  }
+}
+
+######## Step 19
+
+mutation<-function(condition){
+  n<-nrow(condition)
+  condition.mutate<-sample(1:7, n, replace = T )
+  condition.new<-rep(0, n)
+  
+  condition.new[which(condition$condition==7 & condition.mutate==7)]<-7
+  condition.new[which(condition$condition==7 & condition.mutate==1)]<-1
+  condition.new[which(condition$condition==1 & condition.mutate==7)]<-1
+  condition.new[which(condition$condition==6 | condition.mutate==6)]<-6
+  
+  index<-which(condition.new==0)
+  condition.new[index]<-condition$condition[index] + condition.mutate[index] -1
+  condition.new[index]<-ifelse(condition.new[index]>6, 6, condition.new[index])
+  
+  index.diff<-which(condition$condition != condition.new)
+  condition$duration[index.diff]<-0
+  condition$condition<-condition.new
+  
+  return(condition)
+}
+
+########## Step 20
+
+vaccine<-function(condition, protection_ability){
+  index<-which(condition$condition %in% c(1,2) & protection_ability>0)
+  n<-length(index)
+  
+  if(n==0){
+    return(protection_ability)
+  }
+  
+  else{
+    vaccine<-sample(0:1,n, replace = T, prob=c(0.7, 0.3))
+    condition<-cbind(condition, vac=rep(0, nrow(condition)))
+    condition[index,]$vac<-vaccine
+    
+    protection_ability[which(condition$vac==1)]<-0.05
+    
+    return(protection_ability)
+  }
+}
 
 
 
