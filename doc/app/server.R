@@ -269,7 +269,9 @@ shinyServer(function(input, output) {
         }
     )
     
-
+    output$Time = renderText(
+        paste0('Day ', current$Time)
+    )
     
     output$Infected = renderText(
         paste0('Infected:', sum(current$condition$condition %in% c(2:5)))
