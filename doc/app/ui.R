@@ -9,7 +9,7 @@ ui <- fluidPage(
         sliderInput(inputId = 'N', 
                     label = 'Number of points', 
                     value = 3000, 
-                    min = 100, 
+                    min = 1000, 
                     max = 10000),
         sliderInput(inputId = 'Num_public', 
                     label = 'Number of public places', 

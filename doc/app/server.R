@@ -243,7 +243,7 @@ shinyServer(function(input, output) {
     
     observeEvent(input$expendhos, {
         session$expend_hospital = session$expend_hospital + 1
-        if(session$expend_hospital <= 4)
+        if(session$expend_hospital <= 5)
             current$data_public[current$data_public$Class == 1, 'Capacity'] = round(current$data_public[current$data_public$Class == 1, 'Capacity'] * 1.5)
     })
     
