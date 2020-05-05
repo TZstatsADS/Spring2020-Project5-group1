@@ -19,6 +19,11 @@ shinyServer(function(input, output) {
     session$whole_data = NULL
     session$vaccine = NULL
     session$vacstart = NULL
+    session$social_distance = FALSE
+    session$close_restaurant = FALSE
+    session$quarantine = FALSE
+    session$last_quarantine = 0
+    session$expend_hospital = 0
     
     current = reactiveValues()
     current$data = NULL
@@ -30,6 +35,8 @@ shinyServer(function(input, output) {
     current$data_public = NULL
     current$people_duration = NULL
     current$before_place_info = NULL
+    current$before_hos_info = NULL
+    current$v_initial = NULL
     current$Time = NULL
     current$vacday = NULL
     
@@ -55,11 +62,16 @@ shinyServer(function(input, output) {
         protection_ability2[protection_ability2 < 0.05] = 0.05
         protection_ability2[protection_ability2 > 1] = 1
         
+        if(input$mask)
+            protection_ability2 = protection_ability2/2
+        
         data_public2 = intialize_public_place(R, P, input$N, input$Num_public, Hospital_capacity)
         
         people_duration2 = data.frame(place = rep(0, input$N), place_index = rep(0, input$N), duration = rep(0, input$N))
         
         before_place_info2 = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
+        
+        before_hos_info2 = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
         
         current$data = data2
         current$new_data = data2
@@ -70,9 +82,13 @@ shinyServer(function(input, output) {
         current$data_public = data_public2
         current$people_duration = people_duration2
         current$before_place_info = before_place_info2
+        current$before_hos_info = before_hos_info2
+        current$v_initial = v2
         current$Time = 0
         current$vacday = 0
         
+        session$last_quarantine = 0
+        session$expend_hospital = 0
         session$vacstart = runif(1, 8, 15)
         session$whole_data = rbind(session$whole_data, cbind(current$data, Condition = current$condition$condition, Time = rep(0, input$N)))
     }
@@ -89,25 +105,71 @@ shinyServer(function(input, output) {
         # Step 4
         current$new_data = through_wall(current$data, current$new_data, R, alpha)
         # Step 5
-        current$condition = infection(current$new_data, current$v, current$condition, current$infectious_ability, current$protection_ability, input$pc)
+        current$condition = infection(current$new_data, current$v, current$condition, current$infectious_ability, current$protection_ability, input$pc, session$social_distance, social_distance)
         # Step 6
         temp = condition_change(current$condition, current$v, transform_probability, speed)
         current$condition = temp[[1]]
         current$v = temp[[2]]
         # Step 8
-        temp = moveto_restaurant(current$data, current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
-        current$new_data = temp[[1]]
-        current$before_place_info = temp[[2]]
-        current$v = temp[[3]]
-        current$data_public = temp[[4]]
-        current$people_duration = temp[[5]]
+        if(!session$close_restaurant){
+            temp = moveto_restaurant(current$data, current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
+            current$new_data = temp[[1]]
+            current$before_place_info = temp[[2]]
+            current$v = temp[[3]]
+            current$data_public = temp[[4]]
+            current$people_duration = temp[[5]]
+        }
         # Step 9
-        temp = outof_restaurant(current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
+        if(!session$close_restaurant) # Step 13
+            temp = outof_restaurant(current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
+        else
+            temp = close_restaurant(current$new_data, current$data_public, current$people_duration, current$before_place_info, current$v, current$condition)
         current$new_data = temp[[1]]
         current$before_place_info = temp[[2]]
         current$v = temp[[3]]
         current$data_public = temp[[4]]
         current$people_duration = temp[[5]]
+        # Step 10
+        temp = moveto_hospital(current$data, current$new_data, current$data_public, current$people_duration, current$before_hos_info, current$v, current$condition)
+        current$new_data = temp[[1]]
+        current$before_hos_info = temp[[4]]
+        current$v = temp[[5]]
+        current$data_public = temp[[2]]
+        current$people_duration = temp[[3]]
+        # Step 11
+        current$condition = symptom_hos_change(current$condition, current$people_duration)
+        # Step 12
+        temp = moveout_hospital(current$data, current$new_data, current$data_public, current$people_duration, current$before_hos_info, current$v, current$condition)
+        current$new_data = temp[[1]]
+        current$before_hos_info = temp[[4]]
+        current$v = temp[[5]]
+        current$data_public = temp[[2]]
+        current$people_duration = temp[[3]]
+        # Step 13
+        ## Quarantine
+        if(session$quarantine == TRUE){
+            temp = start_Quarantine(current$v, current$v_initial, current$people_duration, Quarantine_ratio, condition = current$condition$condition)
+            current$v = temp[[1]]
+            session$last_quarantine = temp[[2]]
+        }
+        if(session$quarantine == FALSE & session$last_quarantine == 1){
+            temp = end_Quarantine(current$v, current$v_initial, current$people_duration, condition = current$condition$condition)
+            current$v = temp[[1]]
+            session$last_quarantine = temp[[2]]
+        }
+        # Step 14
+        temp = close_contacts(current$data, current$new_data, current$v, current$v_initial, current$people_duration, condition = current$condition$condition)
+        current$v = temp[[1]]
+        current$people_duration = temp[[2]]
+        
+        temp = close_contacts_end14(current$data, current$new_data, current$v, current$v_initial, current$people_duration, condition = current$condition$condition)
+        current$v = temp[[1]]
+        current$people_duration = temp[[2]]
+        
+        current$protection_ability = protection_ability_quarantine(current$v, current$people_duration, current$protection_ability)
+        
+        
+        
         
         
         # Step 18
@@ -157,12 +219,38 @@ shinyServer(function(input, output) {
             forward()
     })
     
+    observeEvent(input$mask,{
+        if(input$mask){
+            current$protection_ability = current$protection_ability/2
+            current$protection_ability[current$protection_ability < 0.05] = 0.05
+        }
+            
+        else
+            current$protection_ability = current$protection_ability*2
+    })
+    
+    observeEvent(input$socialdist, {
+        session$social_distance = input$socialdist
+    })
+    
+    observeEvent(input$closerest, {
+        session$close_restaurant = input$closerest
+    })
+    
+    observeEvent(input$quarantine, {
+        session$quarantine = input$quarantine
+    })
+    
+    observeEvent(input$expendhos, {
+        session$expend_hospital = session$expend_hospital + 1
+        if(session$expend_hospital <= 4)
+            current$data_public[current$data_public$Class == 1, 'Capacity'] = round(current$data_public[current$data_public$Class == 1, 'Capacity'] * 1.5)
+    })
+    
     observeEvent(input$vaccine, {
         if(input$vaccine)
             session$vaccine = current$Time
     })
-    
-    
     
     output$Simulation = renderPlot({
         
@@ -195,8 +283,12 @@ shinyServer(function(input, output) {
         paste0('Cured:', sum(current$condition$condition == 7))
     )
     
+    output$Hospital = renderText(
+        paste0('Hospital Capacity:', sum(current$data_public[current$data_public$Class == 1, 'Capacity']), ' Current:', sum(current$data_public[current$data_public$Class == 1, 'Current']))
+    )
+    
     output$All = renderText(
-        paste0('ALL:', sum(current$condition$condition == 1), ' ', sum(current$condition$condition == 2), ' ', sum(current$condition$condition == 3), ' ', sum(current$condition$condition == 4), ' ', sum(current$condition$condition == 5))
+        paste0('Restaurant Capacity:', sum(current$data_public[current$data_public$Class == 3, 'Capacity']), ' Current:', sum(current$data_public[current$data_public$Class == 3, 'Current']))
     )
 })
 

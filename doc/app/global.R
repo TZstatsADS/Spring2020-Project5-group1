@@ -19,7 +19,7 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # speed: A vector of movement speed of points with different symptoms
 # Num_public: A number indicates the number of public places
 # Hospital_capacity: A decimal indicates the ratio of hospital capacity
-
+# social_distance: A number of social distance
 
 N = 3000
 # R need to be decreasing
@@ -35,6 +35,9 @@ min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
 Num_public = 20
 Hospital_capacity = 0.01
+social_distance = 1.8 
+Quarantine_ratio = 0.7
+
 options(warn =-1)
 
 
@@ -280,7 +283,7 @@ pairwise_dist = function(data1, data2){
   return(Dist_matrix)
 }
 
-infection = function(data, v, condition, infectious_ability, protection_ability, pc){
+infection = function(data, v, condition, infectious_ability, protection_ability, pc, trigger_social_distance , sd = social_distance){
   # data: A data frame contains X and Y which is the position
   # v: A vector contains the speed of points
   # condition: A vector contains 7 factors of illness and its duration
@@ -305,11 +308,18 @@ infection = function(data, v, condition, infectious_ability, protection_ability,
   canbe_infected_index = which(condition$condition == 1)
   canbe_infected_length = length(canbe_infected_index)
   
-
   if(infection_length == 0)
     return(condition)
   
   distance = pairwise_dist(data[infection_index,], data[canbe_infected_index,])
+  
+  # Step 13 zzq
+  # social_distance
+  U = runif(nrow(distance)*ncol(distance), 0.4, 1)
+  U = matrix(U, nr = nrow(distance), nc = ncol(distance))
+  if(trigger_social_distance)
+    distance = distance + sd*U
+  
   
   infection_change = function(condition2,infectious_ability2, protection_ability2, pc, infection_radius){
     
@@ -512,6 +522,10 @@ moveto_restaurant = function(last_data, new_data, data_public, people_duration, 
   U = runif(nrow(influence_index), 0, 1)
   
   confirmed_index = influence_index[U < pr,]
+  confirmed_index = matrix(influence_index, nc = 2)
+  if(nrow(confirmed_index) == 0)
+    return(list(new_data, before_place_info, v, data_public, people_duration))
+  
   notdupli = !duplicated(confirmed_index[,1])
   cr = confirmed_index[notdupli,1]
   cc = confirmed_index[notdupli,2]
@@ -579,6 +593,293 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
   
   return(list(data, before_place_info, v, data_public, people_duration))
 }
+
+########## Step 10
+
+moveto_hospital <- function(last_data, new_data, data_public, people_duration, before_hos_info, v, condition){
+  # last_data: A data frame contains X and Y which is last position
+  # new_data: A data frame contains X and Y which is new position
+  # data_public: A data frame contains X, Y, class and condition.
+  # people_duration: A data frame contains each points' place and duration
+  # before_place_info: A data frame contains info of points before move to place.
+  # v: A vector contains the speed of points
+  # condition: A vector contains 7 factors of illness and its duration
+  
+  data_public_hos = data_public %>% filter(Class == 1)
+  hos_index = data_public_hos[, 'Index']
+  n <- length(hos_index)
+  
+  N = nrow(last_data)
+  moderate_index = which(condition$condition == 3 & people_duration$place != 1)
+  severe_index = which(condition$condition == 4 & people_duration$place != 1)
+  critical_index = which(condition$condition == 5 & people_duration$place != 1)
+  movein_index = which(condition$condition %in% c(4,5) & people_duration$place != 1)
+  
+  n_moderate = length(moderate_index)
+  n_severe = length(severe_index)
+  n_critical = length(critical_index)
+  n_movein = n_severe + n_critical
+  
+  #cat(n_moderate, n_severe, n_critical)
+  empty_space = data_public_hos[,"Capacity"] - data_public_hos[,"Current"]
+  vec = rep(1:length(empty_space), empty_space)
+  
+  if(n_movein <= sum(empty_space) & sum(data_public_hos$Capacity - data_public_hos$Current) > 0){
+    if(n_movein == 0){
+      return (list(new_data, data_public, people_duration, before_hos_info, v))
+    }
+    
+    if(length(vec) == 1){
+      put_in = vec[1]
+    }else{
+      put_in = sample(as.vector(vec),n_movein)
+    }
+    t1 = as.data.frame(table(put_in))
+    t1 <- t1 %>% mutate(put_in = as.numeric(as.character(t1$put_in)))
+    df <- data.frame(put_in = c(1:n))
+    df <- left_join(df, t1, by = "put_in")
+    df[is.na(df)] <- 0
+    n <- df$Freq
+    
+    data_public_hos[,"Current"] = data_public_hos[,"Current"] + n
+    
+    
+    #update data_public
+    data_public[hos_index,] = data_public_hos
+    
+    #update before_hos_info
+    before_info = data.frame(index = movein_index, X = new_data[movein_index, 'X'], Y = new_data[movein_index, 'Y'], v = v[movein_index], condition = condition$condition[movein_index])
+    before_hos_info = rbind(before_hos_info, before_info)
+    
+    #update new_data
+    new_data[movein_index,] = before_hos_info[before_hos_info$index %in% movein_index, c("X", "Y")]
+    
+    #update people_duration
+    people_duration[movein_index,"place"] = 1
+    people_duration[movein_index,"place_index"] = data_public_hos[put_in, 'Index']
+    people_duration[movein_index,"duration"] = 0
+    
+    v[movein_index] = 0
+  }else if(n_movein > sum(data_public_hos$Capacity - data_public_hos$Current) & sum(data_public_hos$Capacity - data_public_hos$Current) > 0){
+    num_ava = sum(data_public_hos$Capacity - data_public_hos$Current)
+    can_movein_index = sample(movein_index, num_ava)
+    
+    if(length(vec) == 1){
+      put_in = vec[1]
+    }else{
+      put_in = sample(as.vector(vec),num_ava)
+    }
+    t1 = as.data.frame(table(put_in))
+    t1 <- t1 %>% mutate(put_in = as.numeric(as.character(t1$put_in)))
+    df <- data.frame(put_in = c(1:n))
+    df <- left_join(df, t1, by = "put_in")
+    df[is.na(df)] <- 0
+    n <- df$Freq
+    
+    data_public_hos[,"Current"] = data_public_hos[,"Current"] + n
+    
+    #update data_public
+    data_public[hos_index,] = data_public_hos
+    
+    #update befor_hos_info
+    before_info = data.frame(index = can_movein_index, X = new_data[can_movein_index, 'X'], Y = new_data[can_movein_index, 'Y'], v = v[can_movein_index], condition = condition$condition[can_movein_index])
+    before_hos_info = rbind(before_hos_info, before_info)
+    
+    #update new_data
+    new_data[can_movein_index,] = before_hos_info[before_hos_info$index %in% can_movein_index, c("X", "Y")]
+    
+    #update people_duration
+    people_duration[can_movein_index,"place"] = 1
+    people_duration[can_movein_index,"place_index"] = data_public_hos[put_in, 'Index']
+    people_duration[can_movein_index,"duration"] = 0
+    
+    v[can_movein_index] = 0
+  }
+  return (list(new_data, data_public, people_duration, before_hos_info, v))
+}
+
+########## Step 11
+
+symptom_hos_change = function(condition, people_duration){
+  index4 = which(people_duration$place == 1 & condition$condition == 4)
+  index5 = which(people_duration$place == 1 & condition$condition == 5)
+  l4 = length(index4)
+  l5 = length(index5)
+  
+  U4 = runif(l4, 0 ,1)
+  U5 = runif(l5, 0 ,1)
+  ease_index4 = index4[U4 < (transform_probability["4",1]+0.2)]
+  ease_index5 = index5[U5 < (transform_probability["5",1]+0.2)]
+  ease_index = c(ease_index4, ease_index5)
+  
+  condition[ease_index,"condition"] = condition$condition[ease_index]-1
+  condition[ease_index,"duration"] = 0
+  
+  return(condition)
+}
+
+########## Step 12
+
+moveout_hospital = function(last_data, new_data, data_public, people_duration, before_hos_info, v, condition){
+  cure_index = sort(which(condition$condition != 3 & condition$condition != 4 & condition$condition != 5 & people_duration$place == 1))
+  n_cure <- length(cure_index)
+  
+  if(n_cure == 0){
+    return (list(new_data, data_public, people_duration, before_hos_info, v))
+  }
+  
+  dt <- before_hos_info[before_hos_info$index %in% cure_index,]
+  
+  #update new_data
+  new_data[cure_index,] = dt[order(dt$index), c("X", "Y")]
+  
+  n = table(people_duration[cure_index,"place_index"])
+  hos_index = names(n)
+  names(n) = NULL
+  
+  #update data_public
+  data_public[data_public$Index %in% hos_index, 'Current'] = data_public[data_public$Index %in% hos_index, 'Current'] - n
+  
+  #update people_duration
+  people_duration[cure_index,c("place", "place_index", "duration")] = 0
+  
+  #update v
+  v[cure_index] = dt[order(dt$index), "v"] / speed[dt[order(dt$index), "condition"]] * speed[condition$condition[cure_index]]
+  
+  #update before_hos_info
+  before_hos_info = before_hos_info[!before_hos_info$index %in% cure_index,]
+  
+  return (list(new_data, data_public, people_duration, before_hos_info, v))
+}
+
+########## Step 13
+
+### Close restaurant
+
+close_restaurant = function(data, data_public, people_duration, before_place_info, v, condition){
+  # data: A data frame containsAquamarine X and Y 
+  # data_public: A data frame contains X, Y, class and condition.
+  # people_duration: A data frame contains each points' place and duration
+  # before_place_info: A data frame contains info of points before move to place.
+  # v: A vector contains the speed of points
+  # condition: A vector contains 7 factors of illness and its duration
+  
+  confirmed_out_index = which(people_duration$place == 3)
+  if(length(confirmed_out_index) == 0)
+    return(list(data, before_place_info, v, data_public, people_duration))
+  
+  d = before_place_info %>% filter(index %in% confirmed_out_index) %>% arrange(index)
+  
+  data[confirmed_out_index,] = d[, c('X', 'Y')]
+  
+  v[confirmed_out_index] = d[, 'v'] * speed[condition$condition[confirmed_out_index]] / speed[d$condition]
+  
+  out_num = people_duration[confirmed_out_index,]$place_index %>% table()
+  reduce_index = which(data_public$Index %in% names(out_num))
+  data_public[reduce_index, 'Current'] = data_public[reduce_index, 'Current'] - out_num
+  
+  people_duration[confirmed_out_index,] = data.frame(place = 0, place_index = 0, duration = 0)
+  
+  before_info_delete_index = which(before_place_info$index %in% confirmed_out_index)
+  before_place_info = before_place_info[-before_info_delete_index, ]
+  
+  return(list(data, before_place_info, v, data_public, people_duration))
+}
+
+### Quarantine
+
+start_Quarantine<-function(v,v_initial,people_duration,Quarantine_ratio,condition=condition$condition){
+  
+  N_all = length(v_initial)
+  not_in_place_index=(1:N_all)[people_duration$place==0]
+  
+  N=length(not_in_place_index)
+  
+  quarantine_index = sample(not_in_place_index,round(Quarantine_ratio*N))
+  not_quarantine_index=setdiff(not_in_place_index,quarantine_index)
+  
+  v[quarantine_index]=0 
+  
+  v[not_quarantine_index]=v_initial[not_quarantine_index] 
+  
+  v[not_in_place_index]=v[not_in_place_index]*speed[condition[not_in_place_index]] 
+  
+  return(list(v=v,last_quarantine=1))
+}
+
+end_Quarantine<-function(v,v_initial,people_duration,condition=condition$condition){
+  N_all = length(v_initial)
+  not_in_place_index=(1:N_all)[people_duration$place==0]
+  
+  N = length(not_in_place_index)
+  
+  v[not_in_place_index] = v_initial[not_in_place_index]
+  
+  v[not_in_place_index]=v[not_in_place_index]*speed[condition[not_in_place_index]]
+  return(list(v=v,last_quarantine=0))
+}
+
+########## Step 14
+
+close_contacts<-function(last_data, new_data,v,v_initial,people_duration,condition=condition$condition){
+  
+  N_all=length(v)
+  
+  
+  patientnew_index=(1:N_all)[people_duration$place==1&people_duration$duration==1]
+  if(patientnew_index%>%length==0){return(list(v,people_duration))}
+  
+  patientnew_location=last_data[patientnew_index,]
+  
+  not_in_place_index=(1:N_all)[people_duration$place==0]
+  
+  distance=pairwise_dist(patientnew_location,last_data[not_in_place_index,])
+  colnames(distance)=not_in_place_index
+  close_contacts_index=NULL
+  for (i in seq_along(patientnew_index)){
+    close_contacts_index=c(close_contacts_index,distance[i,]%>%sort()%>%head(3)%>%names)
+  }
+  
+  people_duration[close_contacts_index,]$place=0.5  
+  people_duration[close_contacts_index,]$duration=1
+  close_contacts_index=close_contacts_index%>%as.numeric()
+  v[close_contacts_index]=0
+  
+  
+  return(list(v,people_duration))
+} 
+
+close_contacts_end14<-function(last_data, new_data,v,v_initial,people_duration,condition=condition$condition){
+  
+  N_all=length(v_initial)
+  end_of_14_index=(1:N_all)[people_duration$place==0.5&people_duration$duration==14]
+  
+  if(end_of_14_index%>%length==0){return(list(v,people_duration))}
+  
+  
+  people_duration[end_of_14_index,]$place=0
+  people_duration[end_of_14_index,]$duration=1
+  v[end_of_14_index] = v_initial[end_of_14_index]
+  
+  v[end_of_14_index]=v[end_of_14_index]*speed[condition[end_of_14_index]]
+  
+  return(list(v,people_duration))
+}  
+
+protection_ability_quarantine<-function(v,people_duration,protection_ability){
+  protection_ability[protection_ability<0.05]=protection_ability[protection_ability<0.05]*21
+  
+  N_all=length(v)
+  quarantine_index=(1:N_all)[(v==0)&(people_duration$place %in% c(0,0.5) )]
+  
+  if (length(quarantine_index)==0) return(protection_ability)
+  
+  protection_ability[quarantine_index]=protection_ability[quarantine_index]/21
+  
+  return(protection_ability)
+  
+}
+
 
 
 
