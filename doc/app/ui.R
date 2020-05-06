@@ -6,7 +6,7 @@ ui <- fluidPage(
         sidebarLayout(
         sidebarPanel(
         sliderInput(inputId = 'N', 
-                    label = 'Population of the biggest city', 
+                    label = 'Population of the largest city', 
                     value = 3000, 
                     min = 1000, 
                     max = 10000),
