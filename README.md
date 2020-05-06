@@ -28,7 +28,7 @@
   + Jinxu built step 17 which can clearly demonstrate the movement of people between cities, but unfortunately it is incompatible with the previous steps and cannot be used. 
   + Shuxin Chen provided the idea and code for step 18 and 19, added the chance for recrudescence and vaccine to cure disease. 
   + Everyone provided their own part in step 20 and together formed the simulation section.
-  + Jinxu modify the entire model and put it into the global.r and built the UI and Server of Shiny App. 
+  + Jinxu modified the entire model and put it into the global.r and built the UI and Server of Shiny App. 
   + Ziqin is the presenter and she used website form Shiny App to present.
 
 **Presentation link:** 
