@@ -2,7 +2,7 @@
 
 ![GIF](output/output.gif)
 
-**Term: Spring 2020**: 
+**Term: Spring 2020**
 + Team #1
 + Project title: Virus spreading model
 + Team members
