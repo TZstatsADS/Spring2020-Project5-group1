@@ -1220,7 +1220,7 @@ generate_center = function(R, n_city){
 # }
 ```
 
-## Step 18: Recrudesce
+## Step 18: Recrudescence
 
 ```{r}
 recrudesce<-function(condition, vaccine){
