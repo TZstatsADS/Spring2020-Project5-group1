@@ -34,6 +34,9 @@
 **Presentation link:** 
 https://drive.google.com/file/d/1sc9ASfqH0uKFTFjkaG-D-a9SCV_Mp_0y/view?usp=sharing
 
+**Shiny App link:** 
+https://jinxuxiang.shinyapps.io/Random_walk/
+
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
 ```
