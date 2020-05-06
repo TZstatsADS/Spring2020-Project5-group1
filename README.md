@@ -1,9 +1,8 @@
 # ADS Project 5: 
 
-Term: Spring 2020
-
 ![GIF](output/output.gif)
 
+Term: Spring 2020
 + Team #
 + Projec title: Lorem ipsum dolor sit amet
 + Team members
