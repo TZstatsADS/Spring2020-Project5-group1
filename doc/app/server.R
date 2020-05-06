@@ -306,15 +306,19 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$mask,{
+        if(is.null(session$Num_city))
+            return()
+        
         if(input$mask){
             for(i in 1:session$Num_city){
                 current$protection_ability[[i]] = current$protection_ability[[i]]/2
                 current$protection_ability[[i]][current$protection_ability[[i]] < 0.05] = 0.05
             }
-        }
+        } else{
+            for(i in 1:session$Num_city){
+                current$protection_ability[[i]] = current$protection_ability[[i]]*2
+            }
             
-        else{
-            current$protection_ability[[i]] = current$protection_ability[[i]]*2
         }
             
     })
