@@ -1344,6 +1344,8 @@ simulation_points = function(N, R, P, Num_public, Times, n_city){
   # Quarantine
   trigger_quarantine = FALSE 
   last_quarantine = 0
+  # Step 15
+  close_station = FALSE
   # Step 19
   vacday = 0
   
@@ -1357,6 +1359,8 @@ simulation_points = function(N, R, P, Num_public, Times, n_city){
       trigger_quarantine = TRUE
     if(t == 35)
       trigger_quarantine = FALSE
+    if(t == 20)
+      close_station = TRUE
     if(t > 20)
       vacday = vacday + 1
     
@@ -1387,19 +1391,20 @@ simulation_points = function(N, R, P, Num_public, Times, n_city){
       v[[i]] = temp[[2]]
       
       # Step 15
-      temp = moveout_station(new_data[[i]], data_public[[i]], people_duration[[i]], centers$x0[i], centers$y0[i], RN[[i]])
-      new_data[[i]] = temp[[1]]
-      data_public[[i]] = temp[[2]]
-      people_duration[[i]] = temp[[3]]
-
-      condition[[i]] = visitors(people_duration[[i]], condition[[i]], ir1, ir2, ir3)
-      
-      temp = movein_station(new_data[[i]], data_public[[i]], condition[[i]], people_duration[[i]], city = i, n_city)
-      new_data[[i]] = temp[[1]]
-      #travel_info[[i]] = temp[[2]]
-      data_public[[i]] = temp[[2]]
-      people_duration[[i]] = temp[[3]]
-      
+      if((!close_station) & n_city > 1){
+        condition[[i]] = visitors(people_duration[[i]], condition[[i]], ir1, ir2, ir3)
+        
+        temp = moveout_station(new_data[[i]], data_public[[i]], people_duration[[i]], centers$x0[i], centers$y0[i], RN[[i]])
+        new_data[[i]] = temp[[1]]
+        data_public[[i]] = temp[[2]]
+        people_duration[[i]] = temp[[3]]
+        
+        temp = movein_station(new_data[[i]], data_public[[i]], condition[[i]], people_duration[[i]], city = i, n_city)
+        new_data[[i]] = temp[[1]]
+        #travel_info[[i]] = temp[[2]]
+        data_public[[i]] = temp[[2]]
+        people_duration[[i]] = temp[[3]]
+      }
       # Step 8
       if(trigger_restaurant == TRUE){
         temp = moveto_restaurant(data[[i]], new_data[[i]], data_public[[i]], people_duration[[i]], before_place_info[[i]], v[[i]], condition[[i]])
