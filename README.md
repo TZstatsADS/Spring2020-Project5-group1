@@ -1,6 +1,6 @@
 # ADS Project 5: Model of Virus Spreading Process
 
-![GIF](output/output.gif)
+![GIF](output/Bad1.gif)
 
 **Term: Spring 2020**
 + Team #1
