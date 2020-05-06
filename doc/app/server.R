@@ -448,7 +448,7 @@ shinyServer(function(input, output) {
     )
     
     output$Author = renderText(
-        paste0('Create by Shuxin Chen, Junyan Guo, Vikki Sui, Jinxu Xiang and Ziqin Zhao.')
+        paste0('Created by Shuxin Chen, Junyan Guo, Vikki Sui, Jinxu Xiang and Ziqin Zhao.')
     )
 })
 
