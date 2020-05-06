@@ -18,9 +18,11 @@ Term: Spring 2020
   + For hospital, when people start to have the severe symptoms, they will be send to the hospital if there is still space in the hosipital. After getting into hospital, we let some of the people to ease their case and then send cured or dead people out of hospital. For station, it is used for city-wide exchange of people.
   + In our model, there are also some policies, like wearing mask, develop vaccines and close station. This policies will significantly affect the epidemic situation. If the policy is used earlier, the number of deaths can be greatly reduced.
   + Then we built specified number of cities with the same features and the stations will bring the virus from one city to others. 
-  + Finally, we put the whole model in shinyapp. So that you can implement the policy, change the infectious ability on any day and save all the previous results as gif.
+  + Finally, we put the whole model in shiny app. So that you can implement the policy, change the infectious ability on any day and save all the previous results as gif.
 	
-**Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
+**Contribution statement**: Jinxu Xiang provided the idea of this project and built step 1 to step 9 and step 21 in Random_Walk.Rmd as start code. Vikki Sui wrote step 10 to step 12, which is the hospital section. Ziqin Zhao built step 13 and 14; she provided all policies and produced code to track and quarantine close contacts. Junyan Guo's code made the station operational and proposed a multi-city model, which are step 15 and 16. Jinxu built step 17 which can clearly demonstrate the movement of people between cities, but unfortunately it is incompatible with the previous steps and cannot be used. Shuxin Chen provided the idea and code for step 18 and 19, added the chance for recrudescence and vaccine to cure disease. Everyone provided their own part in step 20, the simulation section. Jinxu modify the entire model and put it into the global.r and built the UI and Server of shiny app. Ziqin is the presenter and she used website form shiny app to present.
+
++ Presentation link:
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
