@@ -34,6 +34,7 @@ my_theme = theme_light() + theme(plot.title = element_text(hjust = 0.5), plot.su
 # vacstart: A number of the start day of vaccine
 # social_distance: A number of social distance
 # Quarantine_ratio: A number of the ratio of quarantine
+# n_city: A number indicates the number of city
 
 N = 3000
 # R need to be decreasing
@@ -43,7 +44,7 @@ P = c(1,2,3,4)
 Times = 60
 pc = 0.1
 pr = 0.4
-transform_probability = data.frame(ease = c(0.2,0.15,0.1), worsen = c(0.3,0.5,0.8))
+transform_probability = data.frame(ease = c(0.2,0.2,0.1), worsen = c(0.2,0.2,0.4))
 rownames(transform_probability) = 3:5
 min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
@@ -52,6 +53,7 @@ Hospital_capacity = 0.01
 vacstart = 12
 social_distance = 0.6  
 Quarantine_ratio = 0.6
+n_city = 2
 ```
 
 ```{r}
@@ -105,7 +107,7 @@ random_point_circle = function(R, N, x_center = 0, y_center = 0){
 ```
 
 ```{r}
-intialize_points = function(N, R, P){
+intialize_points = function(N, R, P, x_center = 0, y_center = 0){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -138,7 +140,7 @@ intialize_points = function(N, R, P){
     }
     need_points = P[i]*N - number_of_points[i]
     generate_points = round(need_points / current_area * total_area)
-    data = rbind(data, random_point_circle(R[i],  generate_points))
+    data = rbind(data, random_point_circle(R[i],  generate_points, x_center, y_center))
     if(i == L){
       number_of_points[L] = number_of_points[L] + generate_points 
     } else{
@@ -147,7 +149,7 @@ intialize_points = function(N, R, P){
 
   }
   if(nrow(data)<N)
-    data = rbind(data, random_point_circle(R[1], N-nrow(data)))
+    data = rbind(data, random_point_circle(R[1], N-nrow(data), x_center, y_center))
   else
     data = data[1:N,]
   
@@ -156,7 +158,7 @@ intialize_points = function(N, R, P){
 ```
 
 ```{r}
-intialize = intialize_points(N, R, P)
+intialize = intialize_points(N, R, P,20,20)
 data = intialize[[1]]
 # To check if the number of data is right
 number_of_points = intialize[[2]]
@@ -219,14 +221,14 @@ random_walk = function(data, v){
   # data: A data frame contains X and Y in first 2 column
   # v: A vector contains the speed of points
   
-  N = nrow(data)
-  if(N != length(v %>% unlist))
+  N0 = nrow(data)
+  if(N0 != length(v %>% unlist))
     stop('Wrong nrow of v in Random_Walk!')
   
-  distance = rnorm(N, v, sd = v/1.5)
+  distance = rnorm(N0, v, sd = v/1.5)
   distance[distance < 0] = 0
   
-  A = runif(N, 0 ,2*pi)
+  A = runif(N0, 0 ,2*pi)
   data$X = data$X + distance * cos(A)
   data$Y = data$Y + distance * sin(A)
   
@@ -373,7 +375,8 @@ infection = function(data, v, condition, infectious_ability, protection_ability,
     confirmed_infection = possible_infection[U < pc * protect_value]
     confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
     
-    condition2[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+    condition2[confirmed_infection, 'condition'] = 2
+    condition2[confirmed_infection, 'duration'] = 0
     
     return(condition2)
   }
@@ -396,8 +399,10 @@ symptom_change = function(condition, v, new_condition, new_v, now, ease, worsen,
   ease_index = index[U < transform_probability[as.character(now),1]]
   worsen_index = index[U > 1-transform_probability[as.character(now),2]]
     
-  new_condition[ease_index,] = data.frame(condition = ease, duration = 0)
-  new_condition[worsen_index,] = data.frame(condition = worsen, duration = 0)
+  new_condition[ease_index, 'condition'] = ease
+  new_condition[ease_index, 'duration'] = 0
+  new_condition[worsen_index, 'condition'] = worsen
+  new_condition[worsen_index, 'duration'] = 0
   new_v[ease_index] = v[ease_index] * speed[ease]/speed[now]
   new_v[worsen_index] = v[worsen_index] * speed[worsen]/speed[now]
     
@@ -423,7 +428,8 @@ condition_change = function(condition, v, transform_probability, speed){
   symptom_date = ifelse(U < 3 ,3, U)
   symptom_index = incubation_index[condition$duration[incubation_index] > symptom_date]
   
-  new_condition[symptom_index,] = data.frame(condition = 3, duration = 0)
+  new_condition[symptom_index, 'condition'] = 3
+  new_condition[symptom_index, 'duration'] = 0
   new_v[symptom_index] = v[symptom_index] * speed[3]/speed[2]
   
   # End of a symptom period, condition 3,4,5 -> (7,4) (3,5) (4,6)
@@ -472,7 +478,7 @@ random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
 ```
 
 ```{r}
-intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
+intialize_public_place = function(R, P, N, Num_public, Hospital_capacity, x_center = 0, y_center = 0){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -495,7 +501,7 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
   density_cumsum = c(0, cumsum(density))
   
   U = runif(1, 0, 1)
-  data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100)
+  data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100, x_center, y_center)
   data_public = rbind(data_public, data_station)
   
   num_hospital = ceiling((Num_public-1)/6)
@@ -518,7 +524,7 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
     for(i in 1:num2){
       R0 = c(R, 0)
       R_i = (R0[pos[i]] - R0[pos[i]+1])*U[i] + R0[pos[i]+1]
-      data_place = random_public_place(R_i, class2, capacity_num[i])
+      data_place = random_public_place(R_i, class2, capacity_num[i], x_center, y_center)
       data_public2 = rbind(data_public2, data_place)
     }
     return(data_public2)
@@ -580,7 +586,7 @@ plot_points = function(data, condition, data_public){
 # Restaurant, '#7FFFD4', Aquamarine
 # Hotel, '#CC99CC', Lilac
 
-data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
+data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity, 20, 20)
 plot_points(data, test_condition, data_public)
 ```
 
@@ -672,6 +678,9 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
   U = runif(num_index, 0, 1)
   confirmed_out_index = possible_out_index[U < pr]
   
+  if(length(confirmed_out_index) == 0)
+    return(list(data, before_place_info, v, data_public, people_duration))
+  
   d = before_place_info %>% filter(index %in% confirmed_out_index) %>% arrange(index)
   
   data[confirmed_out_index,] = d[, c('X', 'Y')]
@@ -721,7 +730,7 @@ moveto_hospital <- function(last_data, new_data, data_public, people_duration, b
   #cat(n_moderate, n_severe, n_critical)
   empty_space = data_public_hos[,"Capacity"] - data_public_hos[,"Current"]
   vec = rep(1:length(empty_space), empty_space)
-
+  
   if(n_movein <= sum(empty_space) & sum(data_public_hos$Capacity - data_public_hos$Current) > 0){
     if(n_movein == 0){
       return (list(new_data, data_public, people_duration, before_hos_info, v))
@@ -834,7 +843,7 @@ moveout_hospital = function(last_data, new_data, data_public, people_duration, b
   
   #update new_data
   new_data[cure_index,] = dt[order(dt$index), c("X", "Y")]
-
+  
   n = table(people_duration[cure_index,"place_index"])
   hos_index = names(n)
   names(n) = NULL
@@ -878,7 +887,7 @@ start_Quarantine<-function(v,v_initial,people_duration,Quarantine_ratio,conditio
   quarantine_index = sample(not_in_place_index,round(Quarantine_ratio*N))
   not_quarantine_index=setdiff(not_in_place_index,quarantine_index)
   
-  v[quarantine_index]=0 
+  v[quarantine_index]=0.05 
   
   v[not_quarantine_index]=v_initial[not_quarantine_index] 
 
@@ -1009,9 +1018,207 @@ protection_ability_quarantine<-function(v,people_duration,protection_ability){
 
 ## Step 15: Train station bring virus
 
+```{r}
+num_transfer = function(data_public, condition){
+  n_capacity = data_public$Capacity[data_public$Class == 2]
+  death_rate = sum(condition == 6)/length(condition)
+  fear = case_when(death_rate < 0.002 ~ sample(1:round(n_capacity/5),1),
+                   (death_rate>0.002 && death_rate<=0.005) ~ sample(round(n_capacity/5):round(n_capacity/5*2),1),
+                   (death_rate>0.005 && death_rate<=0.01) ~ sample(round(n_capacity/5*2):round(n_capacity/5*3),1),
+                   (death_rate>0.01 && death_rate<=0.03) ~ sample(round(n_capacity/5*3):n_capacity,1),
+                   death_rate > 0.03 ~ sample(round(n_capacity/5*4):n_capacity,1)
+  )
+    n_transfer = min(round((sample(1:n_capacity,1) + fear/2)), n_capacity)
+    return(n_transfer)
+}
+```
+
+```{r}
+movein_station = function(new_data, data_public, condition, people_duration, city, n_city){
+  n_transfer = num_transfer(data_public, condition)
+  can_movein_index = which(people_duration$place == 0 & condition$condition %in% c(1,2,3,7))
+  if(length(can_movein_index) == 1 | n_transfer > length(can_movein_index)){
+    movein_index = can_movein_index
+  } else{
+    movein_index = sample(can_movein_index, n_transfer)
+  }
+  
+  new_data2 = new_data
+  new_data2[movein_index, ] = data_public[data_public$Class==2, c('X', 'Y')]
+  
+  data_public2 = data_public
+  data_public2[data_public2$Class == 2, 'Current'] = n_transfer
+  
+  people_duration2 = people_duration
+  people_duration2[movein_index, 'place'] = 2
+  people_duration2[movein_index, 'place_index'] = 1
+  people_duration2[movein_index, 'duration'] = 0
+  
+  # # Step 17
+  # if(n_city == 1 | city > n_city)
+  #   stop('Wrong n_city in movein_station!')
+  # 
+  # dest = 1:n_city
+  # dest = dest[dest != city]
+  # if(n_city >= 3)
+  #   travel_info = data.frame(index = movein_index, UNI = condition$UNI[movein_index], destination = sample(dest, length(movein_index), replace = TRUE))
+  # if(n_city == 2)
+  #   travel_info = data.frame(index = movein_index, UNI = condition$UNI[movein_index], destination = rep(dest, length(movein_index)))
+  
+  return(list(new_data = new_data2, #travel_info = travel_info, 
+              data_public = data_public2, people_duration = people_duration2))
+}
+```
+
+```{r}
+visitors = function(people_duration, condition, ir1, ir2, ir3){
+  index_station = which(people_duration$place == 2)
+  num_station = length(index_station)
+  
+  U = runif(num_station, 0, 1)
+  change_index1 = index_station[U < ir1]
+  change_index2 = index_station[U < ir1+ir2 & U >= ir1]
+  change_index3 = index_station[U < ir1+ir2+ir3 & U >= ir1+ir2]
+  change_index7 = index_station[ir1+ir2+ir3 <= U]
+  
+  condition[change_index1, 'condition'] = 1
+  condition[change_index1, 'duration'] = 0
+  condition[change_index2, 'condition'] = 2
+  condition[change_index2, 'duration'] = 0
+  condition[change_index3, 'condition'] = 3
+  condition[change_index3, 'duration'] = 0
+  condition[change_index7, 'condition'] = 7
+  condition[change_index7, 'duration'] = 0
+  
+  return(condition)
+}
+```
+
+
+```{r}
+moveout_station = function(new_data, data_public, people_duration, x_center, y_center, R){
+  station_index = which(people_duration$place == 2)
+  if(length(station_index) == 0)
+    return(list(new_data = new_data, data_public = data_public, people_duration = people_duration))
+  
+  num_moveout = length(station_index)
+  moveout_data = intialize_points(num_moveout, R, P, x_center, y_center)[[1]]
+  
+  new_data2 = new_data
+  new_data2[station_index,] = moveout_data
+  data_public[data_public$Class==2, 'Current'] = 0
+  people_duration2 = people_duration
+  people_duration2[station_index,] = data.frame(place = 0, place_index = 0, duration = 0)
+  
+  return(list(new_data = new_data2, data_public = data_public, people_duration = people_duration2))
+  
+}
+```
+
 ## Step 16: More cities
 
+```{r}
+generate_center = function(R, n_city){
+  x0 = c(0)
+  y0 = c(0)
+  max_range = 2*max(R) + 20
+  min_range = 2*max(R)
+  if(n_city > 1){
+    while(length(x0) < n_city){
+      Range = runif(1, min_range, max_range)
+      Angle = runif(1, 0, 2*pi)
+      X = Range * cos(Angle)
+      Y = Range * sin(Angle)
+      Dist = sqrt((x0 - X)^2 + (y0 - Y)^2)
+      if(mean(Dist > min_range) == 1){
+        x0 = c(x0, X)
+        y0 = c(y0, Y)
+      }
+      max_range = max_range * 1.1
+    }
+  }
+  return(list(x0 = x0, y0 = y0))
+}
+```
+
 ## Step 17: Travel to another city
+
+```{r}
+# assign_travel = function(travel_info, n_city){
+#   travelin_info = list()
+#   for(i in 1:n_city)
+#     travelin_info[[i]] = data.frame(NULL)
+#   
+#   for(i in 1:n_city){ # out
+#     for(j in 1:n_city){ # in
+#       travelin_info[[j]] = rbind(travelin_info[[j]], travel_info[[i]][travel_info[[i]]$destination == j, c('UNI', 'destination')])
+#     }
+#   }
+#   return(travelin_info = travelin_info)
+# }
+```
+
+```{r}
+# travel_data_change = function(travel_info, n_city, new_data, data_public, condition, v, infectious_ability, protection_ability, people_duration, v_initial){
+#   
+#   travelin_info = assign_travel(travel_info, n_city)
+#   
+#   Travel_new_data = data.frame(NULL)
+#   Travel_condition = data.frame(NULL)
+#   Travel_v = data.frame(NULL)
+#   Travel_infectious_ability = data.frame(NULL)
+#   Travel_protection_ability = data.frame(NULL)
+#   Travel_v_initial = data.frame(NULL)
+#   Travel_people_duration = data.frame(NULL)
+#   
+#   new_data2 = new_data
+#   condition2 = condition
+#   v2 = v
+#   infectious_ability2 = infectious_ability
+#   protection_ability2 = protection_ability
+#   v_initial2 = v_initial
+#   people_duration2 = people_duration
+#   
+#   for(i in 1:n_city){ # record out and delete
+#     Travel_new_data = rbind(Travel_new_data, cbind(UNI = travel_info[[i]]$UNI,  new_data2[[i]][travel_info[[i]]$index, ]))
+#     new_data2[[i]] = new_data2[[i]][-travel_info[[i]]$index,]
+#     Travel_condition = rbind(Travel_condition, cbind(UNI = travel_info[[i]]$UNI, condition2[[i]][travel_info[[i]]$index, ]))
+#     condition2[[i]] = condition2[[i]][-travel_info[[i]]$index,]
+#     Travel_people_duration = rbind(Travel_people_duration, cbind(UNI = travel_info[[i]]$UNI, people_duration2[[i]][travel_info[[i]]$index, ]))
+#     people_duration2[[i]] = people_duration2[[i]][-travel_info[[i]]$index,]
+#     
+#     Travel_v = rbind(Travel_v, cbind(UNI = travel_info[[i]]$UNI, v2[[i]][travel_info[[i]]$index]))
+#     v2[[i]] = v2[[i]][-travel_info[[i]]$index]
+#     Travel_infectious_ability = rbind(Travel_infectious_ability, cbind(UNI = travel_info[[i]]$UNI, infectious_ability2[[i]][travel_info[[i]]$index]))
+#     infectious_ability2[[i]] = infectious_ability2[[i]][-travel_info[[i]]$index]
+#     Travel_protection_ability = rbind(Travel_protection_ability, cbind(UNI = travel_info[[i]]$UNI, protection_ability2[[i]][travel_info[[i]]$index]))
+#     protection_ability2[[i]] = protection_ability2[[i]][-travel_info[[i]]$index]
+#     Travel_v_initial = rbind(Travel_v_initial, cbind(UNI = travel_info[[i]]$UNI, v_initial2[[i]][travel_info[[i]]$index]))
+#     v_initial2[[i]] = v_initial2[[i]][-travel_info[[i]]$index]
+#     
+#   }
+#   
+#   for(i in 1:n_city){ # data in
+#     N0 = sum(Travel_condition$UNI %in% travelin_info[[i]]$UNI)
+#     new_data2[[i]] = rbind(new_data2[[i]], data.frame(X = rep(data_public[[i]][data_public[[i]]$Class == 2, 'X'], N0), Y = rep(data_public[[i]][data_public[[i]]$Class == 2, 'Y'], N0)))
+#     rownames(new_data2[[i]]) = 1:nrow(new_data2[[i]])
+#     condition2[[i]] = rbind(condition2[[i]], Travel_condition[Travel_condition$UNI %in% travelin_info[[i]]$UNI, -1])
+#     rownames(condition2[[i]]) = 1:nrow(condition2[[i]])
+#     people_duration2[[i]] = rbind(people_duration2[[i]], Travel_people_duration[Travel_people_duration$UNI %in% travelin_info[[i]]$UNI, -1])
+#     rownames(people_duration2[[i]]) = 1:nrow(people_duration2[[i]])
+#     
+#     v2[[i]] = c(v2[[i]], Travel_v[Travel_v$UNI %in% travelin_info[[i]]$UNI, -1])
+#     infectious_ability2[[i]] = c(infectious_ability2[[i]], Travel_infectious_ability[Travel_infectious_ability$UNI %in% travelin_info[[i]]$UNI, -1])
+#     protection_ability2[[i]] = c(protection_ability2[[i]], Travel_protection_ability[Travel_protection_ability$UNI %in% travelin_info[[i]]$UNI, -1])
+#     v_initial2[[i]] = c(v_initial2[[i]], Travel_v_initial[Travel_v_initial$UNI %in% travelin_info[[i]]$UNI, -1])
+#     
+#   }
+#   
+#   Traveler = Travel_new_data$UNI
+#   
+#   return(list(new_data = new_data2, condition = condition2, v = v2, infectious_ability = infectious_ability2, protection_ability = protection_ability2, v_initial = v_initial2, people_duration = people_duration2, Traveler = Traveler))
+# }
+```
 
 ## Step 18: Recrudesce
 
@@ -1047,23 +1254,17 @@ vaccine<-function(condition, protection_ability){
   
   else{
     vaccine<-sample(0:1,n, replace = T, prob=c(0.7, 0.3))
-    condition<-cbind(condition, vac=rep(0, nrow(condition)))
-    condition[index,]$vac<-vaccine
-    
-    protection_ability[which(condition$vac==1)]<-0.05
+    protection_ability[index[vaccine == 1]]<-0.05
     
     return(protection_ability)
   }
 }
 ```
 
-
-
-
-## Step ?: Simulation
+## Step 20: Simulation
 
 ```{r}
-simulation_points = function(N, R, P, Times){
+simulation_points = function(N, R, P, Num_public, Times, n_city){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -1071,33 +1272,71 @@ simulation_points = function(N, R, P, Times){
   
   Start_time = Sys.time()
   
-  whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL)
-  # Step 1
-  intialize = intialize_points(N, R, P)
-  data = intialize[[1]]
-  # Step 5
-  condition = data.frame(condition = rep(1, N), duration = rep(0, N))
-  condition = initialize_infector(condition, 5)
+  whole_data = data.frame(X = NULL, Y = NULL, Condition = NULL, Time = NULL, City = NULL)
+  centers = generate_center(R, n_city)
   
-  whole_data = rbind(whole_data, cbind(data, Condition = condition$condition, Time = rep(0, N)))
-  # Step 3
-  v = rnorm(N, 2, 0.8)
-  v[v < 0] = 0
-  # Step 5
-  infectious_ability = rep(1, N)
-  protection_ability = rnorm(N, 1, 0.3)
-  protection_ability[protection_ability < 0.05] = 0.05
-  protection_ability[protection_ability > 1] = 1
-  # Step 7
-  data_public = intialize_public_place(R, P, N, Num_public,Hospital_capacity)
-  # Step 8
-  people_duration = data.frame(place = rep(0, N), place_index = rep(0, N), duration = rep(0, N))
-  before_place_info = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
-  # Step 10
-  before_hos_info = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
+  if(n_city == 1){
+    NN = N
+    Num_publicN = Num_public
+  }
+  RN = list()
+  RN[[1]] = R
+  if(n_city > 1){
+    NN = c(N, round(runif(n_city-1, 0.3, 0.6)*N))
+    Num_publicN = c(Num_public, round(runif(n_city-1, 0.4, 0.6)*Num_public))
+    for(i in 2:n_city){
+      RN[[i]] = runif(1, 0.6, 0.8)*R
+    }
+  }
   
+  
+  data = list()
+  condition = list()
+  v = list()
+  infectious_ability = list()
+  protection_ability = list()
+  data_public = list()
+  people_duration = list()
+  before_place_info = list()
+  before_hos_info = list()
+  v_initial = list()
+  new_data = list()
+  travel_info = list()
+  
+  for(i in 1:n_city){
+    # Step 1
+    intialize = intialize_points(NN[i], RN[[i]], P, centers$x0[i], centers$y0[i])
+    data[[i]] = intialize[[1]]
+    # Step 5
+    condition[[i]] = data.frame(condition = rep(1, NN[i]), duration = rep(0, NN[i]))
+    # condition[[i]] = data.frame(condition = rep(1, NN[i]), duration = rep(0, NN[i]), UNI = (cumsum(NN)-NN+1)[i]:(cumsum(NN))[i])
+    whole_data = rbind(whole_data, cbind(data[[i]], Condition = condition[[i]]$condition, Time = rep(0, NN[i]), City = rep(i, NN[i])))
+    # Step 3
+    v2 = rnorm(NN[i], 2, 0.8)
+    v2[v2 < 0.1] = 0.1
+    v[[i]] = v2
+    # Step 5
+    infectious_ability[[i]] = rep(1, NN[i])
+    protection_ability2 = rnorm(NN[i], 1, 0.3)
+    protection_ability2[protection_ability2 < 0.05] = 0.05
+    protection_ability2[protection_ability2 > 1] = 1
+    protection_ability[[i]] = protection_ability2
+    # Step 7
+    data_public[[i]] = intialize_public_place(RN[[i]], P, NN[i], Num_publicN[i], Hospital_capacity, centers$x0[i], centers$y0[i])
+    # Step 8
+    people_duration[[i]] = data.frame(place = rep(0, NN[i]), place_index = rep(0, NN[i]), duration = rep(0, NN[i]))
+    before_place_info[[i]] = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
+    # Step 10
+    before_hos_info[[i]] = data.frame(index = NULL, X = NULL, Y = NULL, v = NULL, condition = NULL)
+    # Step 13
+    v_initial[[i]] = v[[i]] 
+    # Step 15
+    # travel_info[[i]] = data.frame(index = NULL, UNI = NULL, destination = NULL)
+  }
+  # Step 5
+  condition[[1]] = initialize_infector(condition[[1]], 5)
+
   # Step 13
-  v_initial = v 
   # Close restaurant
   trigger_restaurant = TRUE 
   # Social distance
@@ -1105,19 +1344,11 @@ simulation_points = function(N, R, P, Times){
   # Quarantine
   trigger_quarantine = FALSE 
   last_quarantine = 0
-  
   # Step 19
   vacday = 0
   
   # If change nrow of data, need to change nrow of condition
   for(t in 1:Times){
-    condition$duration = condition$duration + 1
-    people_duration$duration = people_duration$duration + 1
-    # Step 3
-    new_data = random_walk(data, v)
-    # Step 4
-    new_data = through_wall(data, new_data, R, alpha)
-    # Step 5
     if(t == 15)
       trigger_social_distance = TRUE
     if(t == 25)
@@ -1126,91 +1357,133 @@ simulation_points = function(N, R, P, Times){
       trigger_quarantine = TRUE
     if(t == 35)
       trigger_quarantine = FALSE
-    condition = infection(new_data, v, condition, infectious_ability, protection_ability, pc, trigger_social_distance, social_distance)
-    # Step 6
-    temp = condition_change(condition, v, transform_probability, speed)
-    condition = temp[[1]]
-    v = temp[[2]]
-    # Step 8
-    if(trigger_restaurant == TRUE){
-      temp = moveto_restaurant(data, new_data, data_public, people_duration, before_place_info, v, condition)
-      new_data = temp[[1]]
-      before_place_info = temp[[2]]
-      v = temp[[3]] 
-      data_public = temp[[4]]
-      people_duration = temp[[5]]
-    }
-    # Step 9
-    if(trigger_restaurant == TRUE) #Step 13
-      temp = outof_restaurant(new_data, data_public, people_duration, before_place_info, v, condition)
-    else
-      temp = close_restaurant(new_data, data_public, people_duration, before_place_info, v, condition)
-    new_data = temp[[1]]
-    before_place_info = temp[[2]]
-    v = temp[[3]] 
-    data_public = temp[[4]]
-    people_duration = temp[[5]]
-    # Step 10
-    temp = moveto_hospital(data, new_data, data_public, people_duration, before_hos_info, v, condition)
-    new_data = temp[[1]]
-    before_hos_info = temp[[4]]
-    v = temp[[5]]
-    data_public = temp[[2]]
-    people_duration = temp[[3]]
-    # Step 11
-    condition = symptom_hos_change(condition, people_duration)
-    # Step 12
-    temp = moveout_hospital(data, new_data, data_public, people_duration, before_hos_info, v, condition)
-    new_data = temp[[1]]
-    before_hos_info = temp[[4]]
-    v = temp[[5]]
-    data_public = temp[[2]]
-    people_duration = temp[[3]]
-    # Step 13
-    ## Quarantine
-    if(trigger_quarantine==T){
-      temp = start_Quarantine(v,v_initial,people_duration,Quarantine_ratio = Quarantine_ratio ,condition=condition$condition)
-      v=temp[[1]]
-      last_quarantine=temp[[2]]
-    }
-    if(trigger_quarantine==F&last_quarantine==1){
-      temp = end_Quarantine(v,v_initial,people_duration,condition=condition$condition)
-      v=temp[[1]]
-      last_quarantine=temp[[2]]
-    }
-    # Step 14
-    temp=close_contacts(data, new_data,v,v_initial,people_duration,condition=condition$condition)
-    v=temp[[1]]
-    people_duration=temp[[2]]
-    
-    temp=close_contacts_end14(data, new_data,v,v_initial,people_duration,condition=condition$condition)
-    v=temp[[1]]
-    people_duration=temp[[2]]
-    
-    protection_ability=protection_ability_quarantine(v,people_duration,protection_ability)
-    
-    # Step 18
-    condition = recrudesce(condition, vacday > vacstart)
-    # Step 19
-    if(t > 20){
+    if(t > 20)
       vacday = vacday + 1
-      if(vacday > vacstart)
-        protection_ability = vaccine(condition, protection_ability)
+    
+    ir1 = 0
+    ir2 = 0
+    ir3 = 0
+    for(i in 1:n_city){
+      ir1 = ir1 + sum(condition[[i]]$condition == 1)
+      ir2 = ir2 + sum(condition[[i]]$condition == 2)
+      ir3 = ir3 + sum(condition[[i]]$condition == 3)
     }
+    ir1 = ir1/sum(NN)
+    ir2 = ir2/sum(NN)
+    ir3 = ir3/sum(NN)
     
-    
-    whole_data = rbind(whole_data, cbind(new_data, Condition = condition$condition, Time = rep(t, nrow(data))))
-    data = new_data
+    for(i in 1:n_city){
+      condition[[i]]$duration = condition[[i]]$duration + 1
+      people_duration[[i]]$duration = people_duration[[i]]$duration + 1
+      # Step 3
+      new_data[[i]] = random_walk(data[[i]], v[[i]])
+      # Step 4
+      new_data[[i]] = through_wall(data[[i]], new_data[[i]], RN[[i]], alpha, centers$x0[i], centers$y0[i])
+      # Step 5
+      condition[[i]] = infection(new_data[[i]], v[[i]], condition[[i]], infectious_ability[[i]], protection_ability[[i]], pc, trigger_social_distance, social_distance)
+      # Step 6
+      temp = condition_change(condition[[i]], v[[i]], transform_probability, speed)
+      condition[[i]] = temp[[1]]
+      v[[i]] = temp[[2]]
+      
+      # Step 15
+      temp = moveout_station(new_data[[i]], data_public[[i]], people_duration[[i]], centers$x0[i], centers$y0[i], RN[[i]])
+      new_data[[i]] = temp[[1]]
+      data_public[[i]] = temp[[2]]
+      people_duration[[i]] = temp[[3]]
+
+      condition[[i]] = visitors(people_duration[[i]], condition[[i]], ir1, ir2, ir3)
+      
+      temp = movein_station(new_data[[i]], data_public[[i]], condition[[i]], people_duration[[i]], city = i, n_city)
+      new_data[[i]] = temp[[1]]
+      #travel_info[[i]] = temp[[2]]
+      data_public[[i]] = temp[[2]]
+      people_duration[[i]] = temp[[3]]
+      
+      # Step 8
+      if(trigger_restaurant == TRUE){
+        temp = moveto_restaurant(data[[i]], new_data[[i]], data_public[[i]], people_duration[[i]], before_place_info[[i]], v[[i]], condition[[i]])
+        new_data[[i]] = temp[[1]]
+        before_place_info[[i]] = temp[[2]]
+        v[[i]] = temp[[3]] 
+        data_public[[i]] = temp[[4]]
+        people_duration[[i]] = temp[[5]]
+      }
+      # Step 9
+      if(trigger_restaurant == TRUE){#Step 13
+        temp = outof_restaurant(new_data[[i]], data_public[[i]], people_duration[[i]], before_place_info[[i]], v[[i]], condition[[i]])
+      } else{
+        temp = close_restaurant(new_data[[i]], data_public[[i]], people_duration[[i]], before_place_info[[i]], v[[i]], condition[[i]])
+      }
+      new_data[[i]] = temp[[1]]
+      before_place_info[[i]] = temp[[2]]
+      v[[i]] = temp[[3]] 
+      data_public[[i]] = temp[[4]]
+      people_duration[[i]] = temp[[5]]
+      # Step 10
+      temp = moveto_hospital(data[[i]], new_data[[i]], data_public[[i]], people_duration[[i]], before_hos_info[[i]], v[[i]], condition[[i]])
+      new_data[[i]] = temp[[1]]
+      before_hos_info[[i]] = temp[[4]]
+      v[[i]] = temp[[5]]
+      data_public[[i]] = temp[[2]]
+      people_duration[[i]] = temp[[3]]
+      # Step 11
+      condition[[i]] = symptom_hos_change(condition[[i]], people_duration[[i]])
+      # Step 12
+      temp = moveout_hospital(data[[i]], new_data[[i]], data_public[[i]], people_duration[[i]], before_hos_info[[i]], v[[i]], condition[[i]])
+      new_data[[i]] = temp[[1]]
+      before_hos_info[[i]] = temp[[4]]
+      v[[i]] = temp[[5]]
+      data_public[[i]] = temp[[2]]
+      people_duration[[i]] = temp[[3]]
+      # Step 13
+      ## Quarantine
+      if(trigger_quarantine==T){
+        temp = start_Quarantine(v[[i]], v_initial[[i]], people_duration[[i]], Quarantine_ratio = Quarantine_ratio, condition = condition[[i]]$condition)
+        v[[i]] = temp[[1]]
+        last_quarantine = temp[[2]]
+      }
+      if(trigger_quarantine == F & last_quarantine == 1){
+        temp = end_Quarantine(v[[i]], v_initial[[i]], people_duration[[i]], condition = condition[[i]]$condition)
+        v[[i]] = temp[[1]]
+        last_quarantine = temp[[2]]
+      }
+      # Step 14
+      temp = close_contacts(data[[i]], new_data[[i]], v[[i]], v_initial[[i]], people_duration[[i]], condition = condition[[i]]$condition)
+      v[[i]] = temp[[1]]
+      people_duration[[i]] = temp[[2]]
+      temp=close_contacts_end14(data[[i]], new_data[[i]], v[[i]], v_initial[[i]], people_duration[[i]], condition = condition[[i]]$condition)
+      v[[i]] = temp[[1]]
+      people_duration[[i]] = temp[[2]]
+      protection_ability[[i]] = protection_ability_quarantine(v[[i]], people_duration[[i]], protection_ability[[i]])
+      
+      
+      
+      # Step 18
+      condition[[i]] = recrudesce(condition[[i]], vacday > vacstart)
+      # Step 19
+      if(vacday > vacstart)
+        protection_ability[[i]] = vaccine(condition[[i]], protection_ability[[i]])
+
+      
+      
+      whole_data = rbind(whole_data, cbind(new_data[[i]], Condition = condition[[i]]$condition, Time = rep(t, nrow(new_data[[i]])), City = rep(i, nrow(new_data[[i]]))))
+      data[[i]] = new_data[[i]]
+    }
+
   }
   
   End_time = Sys.time()
   
-  check_data = data %>% mutate(Radiu = sqrt(X^2+Y^2))
-  c1 = check_data %>% filter(Radiu<R[1]) %>% nrow()
-  c2 = check_data %>% filter(Radiu<R[2]) %>% nrow()
-  c3 = check_data %>% filter(Radiu<R[3]) %>% nrow()
-  c4 = check_data %>% filter(Radiu<R[4]) %>% nrow()
-  cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\nUsed time: ')
+  for(i in 1:n_city){
+    check_data = data[[i]] %>% mutate(Radiu = sqrt((X-centers$x0[i])^2 + (Y-centers$y0[i])^2))
+    c1 = check_data %>% filter(Radiu<RN[[i]][1]) %>% nrow()
+    c2 = check_data %>% filter(Radiu<RN[[i]][2]) %>% nrow()
+    c3 = check_data %>% filter(Radiu<RN[[i]][3]) %>% nrow()
+    c4 = check_data %>% filter(Radiu<RN[[i]][4]) %>% nrow()
+    cat('Running times:',t, 'Population:', c1, c2, c3, c4, '\n')
+  }
+  cat('Used time: ')
   print(End_time-Start_time)
   cat('\n')
   
@@ -1219,12 +1492,16 @@ simulation_points = function(N, R, P, Times){
 ```
 
 ```{r}
-temp= simulation_points(N, R, P, Times)
+temp= simulation_points(N, R, P, Num_public, Times, n_city)
 whole_data = temp[[1]]
-data_public = temp[[2]]
+data_public_temp = temp[[2]]
+data_public = data.frame(NULL)
+for(i in 1:n_city){
+  data_public = rbind(data_public, data_public_temp[[i]])
+}
 ```
 
-## Step ?: Generate gganimate gif
+## Step 21: Generate gganimate gif
 
 ```{r}
 generate_gif = function(whole_data, data_public){
@@ -1238,7 +1515,7 @@ generate_gif = function(whole_data, data_public){
     geom_point(size = 0.1, alpha = 0.6) + 
     geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
     scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
-    scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
+    scale_size(range = c(1,2.5), name = 'Capacity', guide = FALSE) + 
     coord_fixed() + 
     transition_time(Time) + 
     ease_aes('linear') + 

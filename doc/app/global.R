@@ -29,7 +29,7 @@ P = c(1,2,3,4)
 Times = 60
 pc = 0.1
 pr = 0.4
-transform_probability = data.frame(ease = c(0.3,0.2,0.1), worsen = c(0.1,0.2,0.3))
+transform_probability = data.frame(ease = c(0.2,0.2,0.1), worsen = c(0.2,0.2,0.4))
 rownames(transform_probability) = 3:5
 min_infection_range = 1e-2
 speed = c(1, 1, 0.8, 0.3, 0.1, 0, 1)
@@ -65,13 +65,23 @@ calculate_alpha = function(N, R, P, c){
 # To let the number of points in each ring after 300 runnings is still the same 
 alpha = calculate_alpha(N, R, P, 1.25)
 
-########## Step 0 
+########## Step 0  (Step 21 in Random_Walk)
 
-generate_gif = function(whole_data, data_public, Times, file){
+generate_gif = function(whole_data, data_public, Times, file, xlim, ylim){
   # whole_data: A data.frame contains X, Y, Condition and Time
   # data_public: A data frame contains X, Y, class and condition.
   
   data_public$Class = factor(data_public$Class, levels = 1:4, labels = c('Hospital', 'Station', 'Restaurant', 'Hotel'))
+  
+  if(xlim[2] - xlim[1] > ylim[2] - ylim[1]){
+    difflim = (xlim[2] - xlim[1]) - (ylim[2] - ylim[1])
+    ylim[2] = ylim[2] + 0.5*difflim
+    ylim[1] = ylim[1] - 0.5*difflim
+  }else{
+    difflim = (ylim[2] - ylim[1]) - (xlim[2] - xlim[1])
+    xlim[2] = xlim[2] + 0.5*difflim
+    xlim[1] = xlim[1] - 0.5*difflim
+  }
   
   p = whole_data %>% 
     ggplot(aes(x = X, y = Y, color = factor(Condition, levels = 1:7), group = 1L)) + 
@@ -79,6 +89,8 @@ generate_gif = function(whole_data, data_public, Times, file){
     geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
     scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
     scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
+    scale_x_continuous(limits = c(xlim[1], xlim[2])) + 
+    scale_y_continuous(limits = c(ylim[1], ylim[2])) +
     coord_fixed() + 
     transition_time(Time) + 
     ease_aes('linear') + 
@@ -88,7 +100,6 @@ generate_gif = function(whole_data, data_public, Times, file){
   image <- animate(p, fps = 10, nframes = Times * 4)
   image_write(image, file)
 }
-
 
 ########## Step 1
 
@@ -110,7 +121,7 @@ random_point_circle = function(R, N, x_center = 0, y_center = 0){
   return(data.frame(X = X, Y = Y))
 }
 
-intialize_points = function(N, R, P){
+intialize_points = function(N, R, P, x_center = 0, y_center = 0){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -143,7 +154,7 @@ intialize_points = function(N, R, P){
     }
     need_points = P[i]*N - number_of_points[i]
     generate_points = round(need_points / current_area * total_area)
-    data = rbind(data, random_point_circle(R[i],  generate_points))
+    data = rbind(data, random_point_circle(R[i],  generate_points, x_center, y_center))
     if(i == L){
       number_of_points[L] = number_of_points[L] + generate_points 
     } else{
@@ -152,17 +163,16 @@ intialize_points = function(N, R, P){
     
   }
   if(nrow(data)<N)
-    data = rbind(data, random_point_circle(R[1], N-nrow(data)))
+    data = rbind(data, random_point_circle(R[1], N-nrow(data), x_center, y_center))
   else
     data = data[1:N,]
-  
   
   return(list(data, number_of_points))
 }
 
 ########## Step 2
 
-plot_points = function(data, condition, data_public){
+plot_points = function(data, condition, data_public, xlim, ylim, centers){
   # data: A data frame contains X and Y in first 2 column
   # condition: A vector contains 7 factors of illness and its duration
   # data_public: A data frame contains X, Y, class and condition.
@@ -173,14 +183,31 @@ plot_points = function(data, condition, data_public){
   data_public$Class = factor(data_public$Class, levels = 1:4, labels = c('Hospital', 'Station', 'Restaurant', 'Hotel'))
   
   t = tibble(X = data$X, Y = data$Y, condition = factor(condition$condition, levels = 1:7))
+  centers_tibble = tibble(x0 = centers$x0+max(R)*0.85, y0 = centers$y0+max(R)*0.85, city = 1:length(centers$x0)) %>% 
+    mutate(city = paste0('City', city))
+  
+  
+  if(xlim[2] - xlim[1] > ylim[2] - ylim[1]){
+    difflim = (xlim[2] - xlim[1]) - (ylim[2] - ylim[1])
+    ylim[2] = ylim[2] + 0.5*difflim
+    ylim[1] = ylim[1] - 0.5*difflim
+  }else{
+    difflim = (ylim[2] - ylim[1]) - (xlim[2] - xlim[1])
+    xlim[2] = xlim[2] + 0.5*difflim
+    xlim[1] = xlim[1] - 0.5*difflim
+  }
+    
+  
+  
   g = t %>%
     ggplot(aes(x = X, y = Y, color = condition)) + 
     geom_point(size = 0.1, alpha = 0.6) + 
     geom_point(data = data_public, aes(x = X, y = Y, size = log(Capacity), color = Class), alpha = 0.8) + 
     scale_color_manual(values = c('1' = '#00CC00', '2' = '#FFCC00', '3' = '#FF69B4', '4' = '#DC143C', '5' = '#8B0000', '6' = '#000000', '7' = '#00CCFF', 'Hospital' = '#FF0000', 'Station' = '#FF6600', 'Restaurant' = '#7FFFD4', 'Hotel' = '#CC99CC'), labels = c('Healthy', 'Incubation', 'Moderate', 'Severe', 'Cirtical', 'Death', 'Cure', 'Hospital', 'Station', 'Restaurant', 'Hotel'), name = 'Condition') +
-    scale_size(range = c(2,3.5), name = 'Capacity', guide = FALSE) + 
-    scale_x_continuous(limits = c(-45, 45)) + 
-    scale_y_continuous(limits = c(-45, 45)) +
+    scale_size(range = c(1,2.5), name = 'Capacity', guide = FALSE) + 
+    scale_x_continuous(limits = c(xlim[1], xlim[2])) + 
+    scale_y_continuous(limits = c(ylim[1], ylim[2])) +
+    annotate('text', x = centers_tibble$x0, y = centers_tibble$y0, label = centers_tibble$city) + 
     coord_fixed() + 
     my_theme
   g
@@ -335,7 +362,8 @@ infection = function(data, v, condition, infectious_ability, protection_ability,
     confirmed_infection = possible_infection[U < pc * protect_value]
     confirmed_infection = colnames(distance)[confirmed_infection] %>% as.numeric()
     
-    condition2[confirmed_infection, ] = data.frame(condition = 2, duration = 0)
+    condition2[confirmed_infection, 'condition'] = 2
+    condition2[confirmed_infection, 'duration'] = 0
     
     return(condition2)
   }
@@ -356,8 +384,10 @@ symptom_change = function(condition, v, new_condition, new_v, now, ease, worsen,
   ease_index = index[U < transform_probability[as.character(now),1]]
   worsen_index = index[U > 1-transform_probability[as.character(now),2]]
   
-  new_condition[ease_index,] = data.frame(condition = ease, duration = 0)
-  new_condition[worsen_index,] = data.frame(condition = worsen, duration = 0)
+  new_condition[ease_index, 'condition'] = ease
+  new_condition[ease_index, 'duration'] = 0
+  new_condition[worsen_index, 'condition'] = worsen
+  new_condition[worsen_index, 'duration'] = 0
   new_v[ease_index] = v[ease_index] * speed[ease]/speed[now]
   new_v[worsen_index] = v[worsen_index] * speed[worsen]/speed[now]
   
@@ -381,7 +411,8 @@ condition_change = function(condition, v, transform_probability, speed){
   symptom_date = ifelse(U < 3 ,3, U)
   symptom_index = incubation_index[condition$duration[incubation_index] > symptom_date]
   
-  new_condition[symptom_index,] = data.frame(condition = 3, duration = 0)
+  new_condition[symptom_index, 'condition'] = 3
+  new_condition[symptom_index, 'duration'] = 0
   new_v[symptom_index] = v[symptom_index] * speed[3]/speed[2]
   
   # End of a symptom period, condition 3,4,5 -> (7,4) (3,5) (4,6)
@@ -426,7 +457,7 @@ random_public_place = function(R, class, capacity, x_center = 0, y_center = 0){
   return(data.frame(X = X, Y = Y, Class = class, Capacity = capacity))
 }
 
-intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
+intialize_public_place = function(R, P, N, Num_public, Hospital_capacity, x_center = 0, y_center = 0){
   # N: Total number of points
   # R: A vector of radius
   # P: A vector of the proportion of points in each ring area
@@ -449,7 +480,7 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
   density_cumsum = c(0, cumsum(density))
   
   U = runif(1, 0, 1)
-  data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100)
+  data_station = random_public_place((R[L-2] - R[L])*U + R[L], 2, N/100, x_center, y_center)
   data_public = rbind(data_public, data_station)
   
   num_hospital = ceiling((Num_public-1)/6)
@@ -472,7 +503,7 @@ intialize_public_place = function(R, P, N, Num_public, Hospital_capacity){
     for(i in 1:num2){
       R0 = c(R, 0)
       R_i = (R0[pos[i]] - R0[pos[i]+1])*U[i] + R0[pos[i]+1]
-      data_place = random_public_place(R_i, class2, capacity_num[i])
+      data_place = random_public_place(R_i, class2, capacity_num[i], x_center, y_center)
       data_public2 = rbind(data_public2, data_place)
     }
     return(data_public2)
@@ -575,6 +606,9 @@ outof_restaurant = function(data, data_public, people_duration, before_place_inf
   
   U = runif(num_index, 0, 1)
   confirmed_out_index = possible_out_index[U < pr]
+  
+  if(length(confirmed_out_index) == 0)
+    return(list(data, before_place_info, v, data_public, people_duration))
   
   d = before_place_info %>% filter(index %in% confirmed_out_index) %>% arrange(index)
   
@@ -880,9 +914,120 @@ protection_ability_quarantine<-function(v,people_duration,protection_ability){
   
 }
 
+########## Step 15
 
+num_transfer = function(data_public, condition){
+  n_capacity = data_public$Capacity[data_public$Class == 2]
+  death_rate = sum(condition == 6)/length(condition)
+  fear = case_when(death_rate < 0.002 ~ sample(1:round(n_capacity/5),1),
+                   (death_rate>0.002 && death_rate<=0.005) ~ sample(round(n_capacity/5):round(n_capacity/5*2),1),
+                   (death_rate>0.005 && death_rate<=0.01) ~ sample(round(n_capacity/5*2):round(n_capacity/5*3),1),
+                   (death_rate>0.01 && death_rate<=0.03) ~ sample(round(n_capacity/5*3):n_capacity,1),
+                   death_rate > 0.03 ~ sample(round(n_capacity/5*4):n_capacity,1)
+  )
+  n_transfer = min(round((sample(1:n_capacity,1) + fear/2)), n_capacity)
+  return(n_transfer)
+}
 
+movein_station = function(new_data, data_public, condition, people_duration, city, n_city){
+  n_transfer = num_transfer(data_public, condition)
+  can_movein_index = which(people_duration$place == 0 & condition$condition %in% c(1,2,3,7))
+  if(length(can_movein_index) == 1 | n_transfer > length(can_movein_index)){
+    movein_index = can_movein_index
+  } else{
+    movein_index = sample(can_movein_index, n_transfer)
+  }
+  
+  new_data2 = new_data
+  new_data2[movein_index, ] = data_public[data_public$Class==2, c('X', 'Y')]
+  
+  data_public2 = data_public
+  data_public2[data_public2$Class == 2, 'Current'] = n_transfer
+  
+  people_duration2 = people_duration
+  people_duration2[movein_index, 'place'] = 2
+  people_duration2[movein_index, 'place_index'] = 1
+  people_duration2[movein_index, 'duration'] = 0
+  
+  # if(n_city == 1 | city > n_city)
+  #   stop('Wrong n_city in movein_station!')
+  # 
+  # dest = 1:n_city
+  # dest = dest[dest != city]
+  # if(n_city >= 3)
+  #   travel_info = data.frame(index = movein_index, UNI = condition$UNI[movein_index], destination = sample(dest, length(movein_index), replace = TRUE))
+  # if(n_city == 2)
+  #   travel_info = data.frame(index = movein_index, UNI = condition$UNI[movein_index], destination = rep(dest, length(movein_index)))
+  
+  return(list(new_data = new_data2, #travel_info = travel_info, 
+              data_public = data_public2, people_duration = people_duration2))
+}
 
+visitors = function(people_duration, condition, ir1, ir2, ir3){
+  index_station = which(people_duration$place == 2)
+  num_station = length(index_station)
+  
+  U = runif(num_station, 0, 1)
+  change_index1 = index_station[U < ir1]
+  change_index2 = index_station[U < ir1+ir2 & U >= ir1]
+  change_index3 = index_station[U < ir1+ir2+ir3 & U >= ir1+ir2]
+  change_index7 = index_station[ir1+ir2+ir3 <= U]
+  
+  condition[change_index1, 'condition'] = 1
+  condition[change_index1, 'duration'] = 0
+  condition[change_index2, 'condition'] = 2
+  condition[change_index2, 'duration'] = 0
+  condition[change_index3, 'condition'] = 3
+  condition[change_index3, 'duration'] = 0
+  condition[change_index7, 'condition'] = 7
+  condition[change_index7, 'duration'] = 0
+  
+  return(condition)
+}
+
+moveout_station = function(new_data, data_public, people_duration, x_center, y_center, R){
+  station_index = which(people_duration$place == 2)
+  if(length(station_index) == 0)
+    return(list(new_data = new_data, data_public = data_public, people_duration = people_duration))
+  
+  num_moveout = length(station_index)
+  moveout_data = intialize_points(num_moveout, R, P, x_center, y_center)[[1]]
+  
+  new_data2 = new_data
+  new_data2[station_index,] = moveout_data
+  data_public[data_public$Class==2, 'Current'] = 0
+  people_duration2 = people_duration
+  people_duration2[station_index,] = data.frame(place = 0, place_index = 0, duration = 0)
+  
+  return(list(new_data = new_data2, data_public = data_public, people_duration = people_duration2))
+  
+}
+
+########## Step 16
+
+generate_center = function(R, n_city){
+  x0 = c(0)
+  y0 = c(0)
+  max_range = 2*max(R) + 20
+  min_range = 2*max(R)
+  if(n_city > 1){
+    while(length(x0) < n_city){
+      Range = runif(1, min_range, max_range)
+      Angle = runif(1, 0, 2*pi)
+      X = Range * cos(Angle)
+      Y = Range * sin(Angle)
+      Dist = sqrt((x0 - X)^2 + (y0 - Y)^2)
+      if(mean(Dist > min_range) == 1){
+        x0 = c(x0, X)
+        y0 = c(y0, Y)
+      }
+      max_range = max_range * 1.1
+    }
+  }
+  return(list(x0 = x0, y0 = y0))
+}
+
+########## Step 17
 
 
 ########## Step 18
@@ -916,10 +1061,7 @@ vaccine<-function(condition, protection_ability){
   
   else{
     vaccine<-sample(0:1,n, replace = T, prob=c(0.7, 0.3))
-    condition<-cbind(condition, vac=rep(0, nrow(condition)))
-    condition[index,]$vac<-vaccine
-    
-    protection_ability[which(condition$vac==1)]<-0.05
+    protection_ability[index[vaccine == 1]]<-0.05
     
     return(protection_ability)
   }

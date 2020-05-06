@@ -3,11 +3,10 @@
 library(shiny)
 ui <- fluidPage(
         titlePanel("Simulation"),
-        
         sidebarLayout(
         sidebarPanel(
         sliderInput(inputId = 'N', 
-                    label = 'Number of points', 
+                    label = 'Population of the biggest city', 
                     value = 3000, 
                     min = 1000, 
                     max = 10000),
@@ -16,7 +15,11 @@ ui <- fluidPage(
                     value = 20, 
                     min = 4, 
                     max = 100),
-        
+        sliderInput(inputId = 'Num_city', 
+                    label = 'Number of the citys', 
+                    value = 3, 
+                    min = 1, 
+                    max = 5),
         actionButton(inputId = 'Start',
                      label = 'Start'),
         actionButton(inputId = 'Next', 
@@ -53,6 +56,8 @@ ui <- fluidPage(
                       label = 'Quarantine'),
         checkboxInput(inputId = 'vaccine', 
                       label = 'R & D Vaccine'),
+        checkboxInput(inputId = 'closestation', 
+                      label = 'Close station'),
         actionButton(inputId = 'expendhos', 
                      label = 'Expand Hospital', 
                      width = 260),
@@ -68,8 +73,8 @@ ui <- fluidPage(
         textOutput("Death"),
         textOutput("Cured"),
         textOutput("Hospital"),
-        textOutput("All"),
         )
-        )
+        ),
+        h4(textOutput("Author")),
 )
 
