@@ -1,10 +1,10 @@
-# ADS Project 5: Model of virus spreading process
+# ADS Project 5: Model of Virus Spreading Process
 
 ![GIF](output/output.gif)
 
 Term: Spring 2020
 + Team #1
-+ Project title: Lorem ipsum dolor sit amet
++ Project title: Virus spreading model
 + Team members
 	+ Shuxin Chen
 	+ Junyan Guo
