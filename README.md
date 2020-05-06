@@ -2,7 +2,7 @@
 
 ![GIF](output/output.gif)
 
-Term: Spring 2020
+**Term: Spring 2020**: 
 + Team #1
 + Project title: Virus spreading model
 + Team members
@@ -31,7 +31,7 @@ Term: Spring 2020
   + Jinxu modify the entire model and put it into the global.r and built the UI and Server of Shiny App. 
   + Ziqin is the presenter and she used website form Shiny App to present.
 
-+ Presentation link:
+**Presentation link:** 
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
