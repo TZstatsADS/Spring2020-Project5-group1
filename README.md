@@ -2,6 +2,8 @@
 
 Term: Spring 2020
 
+![GIF](output/output.gif)
+
 + Team #
 + Projec title: Lorem ipsum dolor sit amet
 + Team members
