@@ -336,6 +336,8 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$expendhos, {
+        if(is.null(current$data_public)|is.null(session$expend_hospital))
+            return()
         session$expend_hospital = session$expend_hospital + 1
         if(session$expend_hospital <= 5){
             for(i in 1:session$Num_city){
@@ -381,6 +383,8 @@ shinyServer(function(input, output) {
             paste0(input$gifname, '.gif')
         },
         content = function(file) {
+            if(is.null(current$Time) | current$Time == 0)
+                return()
             dp = data.frame(NULL)
             for(i in 1:session$Num_city)
                 dp = rbind(dp, current$data_public[[i]])
